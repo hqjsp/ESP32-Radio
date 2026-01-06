@@ -160,13 +160,28 @@ void MainScreen::tick() {
 }
 
 
+/*
+ *  StationListScreen class impl.
+ *  extends Screen
+ *
+ *  This manages the selection list functionality. Mainly for when the user wants to scroll through the available
+ *  stations to select something fast. Allows the user to go up and down the list and select something.
+*/
 
-
+/**
+ * @param lcd A pointer to the main LCD
+ * @param size the size of the list. @todo infer this from the sList provided.
+ * @param sList a list of options
+ */
 StationListScreen::StationListScreen(LiquidCrystal_I2C* lcd, int size, char** sList) : Screen(lcd){
   this->selectionList = sList;
   this->sizeofList = size;
 }
 
+/**
+ * Moves down the list to the next element - or goes back to the top if the bottom has been reached.
+ * @todo instantanously update the screen so that it feels responsive.
+ */
 void StationListScreen::moveDown(){
   this->selected++;
   if (this->selected > this->sizeofList - 1)
@@ -174,6 +189,10 @@ void StationListScreen::moveDown(){
   this->refreshOnNextDraw();
 }
 
+/**
+ * Moves up the list to the previous element - or goes back to the bottom if the top has been reached.
+ * @todo instantanously update the screen so that it feels responsive.
+ */
 void StationListScreen::moveUp() {
   this->selected--;
   if (this->selected < 0)
@@ -181,17 +200,25 @@ void StationListScreen::moveUp() {
   this->refreshOnNextDraw();
 }
 
+/**
+ * Returns the currently selected component.
+ */
 int StationListScreen::select(){
   return this->selected;
 }
 
+/** 
+ * Part of the screen interface; is called when the screen is first drawn.
+ */
 void StationListScreen::init(){
-
   this->selected = 0;
   
   this->refreshOnNextDraw();
 }
 
+/**
+ * Called in the main loop to update the screen if necessary.
+ */
 void StationListScreen::tick(){
   if (this->needsUpdate()){
 
@@ -199,29 +226,19 @@ void StationListScreen::tick(){
     this->lcd->setCursor(0, 0);
     this->lcd->print("Station List");
 
-    if (this->selected == 0){
-      this->lcd->setCursor(0, 1);
-      this->lcd->print(">");
-      this->lcd->setCursor(19, 1);
-      this->lcd->print("<");
-    }else if (this->selected == this->sizeofList-1){
-      this->lcd->setCursor(0, 3);
-      this->lcd->print(">");
-      this->lcd->setCursor(19, 3);
-      this->lcd->print("<");
-    }else {
-      this->lcd->setCursor(0, 2);
-      this->lcd->print(">");
-      this->lcd->setCursor(19, 2);
-      this->lcd->print("<");
-    }
+    // checks to see if the selected component is pointing to the beginning/end and adjust the > < selectors, else
+    // set the selected line on the lcd to the third line.
+    int currentY = (this->selected == 0) ? 1 : (this->selected == this->sizeofList-1) ? 3 : 2;
+    this->lcd->setCursor(0, currentY);
+    this->lcd->print(">");
+    this->lcd->setCursor(19, currentY);
+    this->lcd->print("<");
 
     int index = this->selected - 1;
     if (index < 0)
       index = 0;
-    else if (index+2 > this->sizeofList-1){
+    else if (index+2 > this->sizeofList-1)
       index = this->sizeofList - 3;
-    }
 
     for (int i = 0; i < 3; i++){
       this->lcd->setCursor(2, i+1);
@@ -233,25 +250,86 @@ void StationListScreen::tick(){
 }
 
 
+/*
+ *  VolumeScreen class impl.
+ *  extends MainScreen, Screen
+ *
+ *  This is called when the radio needs to display the volume information - ie the user is adjusting the volume.
+ *  The tick method can be adjusted to modify the user interface for this.
+*/
 
 
-
+/**
+ * @param lcd A pointer to the main LCD
+ * @param freq the current frequency expressed as a uint16 - 9990 = 99.9 MHz.
+ * @param initVol the current volume of the radio
+ */
 VolumeScreen::VolumeScreen(LiquidCrystal_I2C* lcd, uint16_t freq, int initVol) : MainScreen(lcd, freq) {
     this->volume = initVol;
 }
 
+/**
+ * Increments the volume by 1 up to a maximum of 15. (Maximum for the SI470x library)
+ */
 void VolumeScreen::moveUp() {
-    this->volume++;
+    if (++this->volume > 15)
+      this->volume = 15;
+
     this->refreshOnNextDraw();
 }
 
+/**
+ * Decrements the volume by 1 down to 0.
+ */
 void VolumeScreen::moveDown(){
-    this->volume--;
-    if (this->volume < 0)
+    if (--this->volume < 0)
         this->volume = 0;
+      
     this->refreshOnNextDraw();
 }
 
+/**
+ * Returns the current volume that is being displayed.
+ */
 int VolumeScreen::getVolume(){
     return this->volume;
+}
+
+/** 
+ * Part of the screen interface; is called when the screen is first drawn.
+ */
+void VolumeScreen::init(){
+  MainScreen::init();
+  
+  this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
+  this->lcd->print("Volume");
+  this->lcd->setCursor(LCD_WIDTH/2 - 1, 2);
+  this->lcd->printf("%02d", this->volume);
+}
+
+/**
+ * Called in the main loop to update the screen if necessary.
+ */
+void VolumeScreen::tick(){
+  if(this->needsUpdate()){
+    this->lcd->clear();
+    this->lcd->setCursor(1, 0);
+
+    this->lcd->setCursor(1, 0);
+
+    this->lcd->print(((float)this->frequency / 100.0f));
+    this->lcd->print(" MHz");
+
+    if(this->hasStereo){
+      this->lcd->setCursor(LCD_WIDTH - 4, 0);
+      this->lcd->print("ST");
+    }
+    
+    this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
+    this->lcd->print("Volume");
+    this->lcd->setCursor(LCD_WIDTH/2 - 1, 2);
+    this->lcd->printf("%02d", this->volume);
+
+    this->hasUpdatedScreen();
+  }
 }

@@ -6,7 +6,7 @@
 //Application app = Application();
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
-MainScreen screen = MainScreen(&lcd, 9990);
+VolumeScreen screen = VolumeScreen(&lcd, 9990, 6);
 
 void setup() {
   // put your setup code here, to run once:
@@ -18,9 +18,9 @@ void setup() {
   lcd.backlight();
   lcd.clear();
 
-  screen.setRDS(true);
-  screen.setRdsPS("Test");
-  screen.setRdsRT("This is test radiotext for the ESP radio");
+  //screen.setRDS(true);
+  //screen.setRdsPS("Test");
+  //screen.setRdsRT("This is test radiotext for the ESP radio");
 
   screen.init();
 }
@@ -28,6 +28,8 @@ void setup() {
 void loop() {
   // put your main code here, to run repeatedly:
   delay(250);
+
+  screen.moveUp();
 
   screen.tick();
 
