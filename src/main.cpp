@@ -47,8 +47,8 @@
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY      100
-#define TMP_SCR_SHOWTIME   30
+#define UPDATE_DELAY       50
+#define TMP_SCR_SHOWTIME   35
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 
@@ -114,10 +114,8 @@ void setup() {
   lcd.createChar(4, meter_empty);
   lcd.createChar(5, meter_full);
 
-  lcd.setCursor(LCD_WIDTH / 2 - 8, 1);
-  lcd.print("ESP-32 FM Radio!");
-  lcd.setCursor(LCD_WIDTH / 2 - 6, 2);
-  lcd.print("Initialising");
+  lcd.setCursor(LCD_WIDTH / 2 - 6, 1);
+  lcd.print("ESP-32 Radio");
 
 
   /** @todo Remove all debug code here */
@@ -138,6 +136,7 @@ void setup() {
   list->add(new FMStationItem(10450, " BEATS "));
   /** end of debug */
 
+  delay(2000);
   // load the main screen
   screen->init();
 }
@@ -249,11 +248,11 @@ void loop() {
 
 
   // check if the screen needs updating, and update it.
-  if (ticker%3 == 0 || buttonPressed) screen->tick();
+  if (ticker%5 == 0 || buttonPressed) screen->tick();
 
   // change the screen back to the main screen if it is on another screen (except the list screen) and
   // this has been active for x amount of time.
-  if(ticker++ > TMP_SCR_SHOWTIME && screen->getType() != LIST_SCREEN){
+  if(++ticker >= TMP_SCR_SHOWTIME && screen->getType() != LIST_SCREEN){
     ticker = 0;
     if (screen->getType() != MAIN_SCREEN) setScreen(MAIN_SCREEN);
   }

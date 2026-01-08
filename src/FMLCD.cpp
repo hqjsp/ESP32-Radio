@@ -115,7 +115,11 @@ void MainScreen::init(){
 
 void MainScreen::tick() {
   if(this->needsUpdate() || this->state->getStateChanged()){
-    this->lcd->clear();
+    this->lcd->setCursor(LCD_WIDTH - 5, 0);
+    this->lcd->print("   ");
+    this->lcd->setCursor(LCD_WIDTH - 1, 0);
+    this->lcd->print(" ");
+
     this->lcd->setCursor(1, 0);
 
     // draw the frequency
@@ -126,6 +130,9 @@ void MainScreen::tick() {
     #if LCD_HEIGHT == 2
       }
     #endif
+    
+    this->lcd->setCursor(0, 1);
+    this->lcd->printf("%*s", LCD_WIDTH);
 
     if (this->state->hasStereo){
       #if LCD_WIDTH < 17 && LCD_HEIGHT > 2
@@ -141,6 +148,15 @@ void MainScreen::tick() {
     this->lcd->write(byte(0));
     if (this->state->signalStrength > 0) 
       this->lcd->write(byte(this->state->signalStrength));
+
+    #if LCD_HEIGHT > 2
+    this->lcd->setCursor(0, 2);
+    this->lcd->printf("%*s", LCD_WIDTH);
+      #if LCD_HEIGHT > 3
+    this->lcd->setCursor(0, 3);
+    this->lcd->printf("%*s", LCD_WIDTH);
+      #endif
+    #endif
 
     if (this->state->hasRds){
       #if LCD_HEIGHT > 2
@@ -348,11 +364,10 @@ int VolumeScreen::select(){
  */
 void VolumeScreen::init(){
   MainScreen::init();
+  this->lcd->clear();
   
   this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
   this->lcd->print("Volume");
-  this->lcd->setCursor(LCD_WIDTH/2 - 1, 2);
-  this->lcd->printf("%02d", this->state->volume);
 }
 
 /**
@@ -360,17 +375,15 @@ void VolumeScreen::init(){
  */
 void VolumeScreen::tick(){
   if(this->needsUpdate() || this->state->getStateChanged()){
-    this->lcd->clear();
     this->lcd->setCursor(0, 0);
 
     #if LCD_HEIGHT > 2
 
       if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
-        this->lcd->setCursor(1, 0);
-        this->lcd->print(((float)this->state->frequency / 100.0f));
-        this->lcd->print(" MHz");
+        this->lcd->setCursor(0, 0);
+        this->lcd->printf(" %.2f MHz", ((float)this->state->frequency / 100.0f));
       }else{
-        this->lcd->print(this->state->ps);
+        this->lcd->printf("% 8s    ", this->state->ps);
       }
 
       // display the Stereo indicator
