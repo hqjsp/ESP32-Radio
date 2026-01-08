@@ -15,6 +15,12 @@ FMState::FMState(uint16_t frequency, uint8_t volume){
     this->reset();
 }
 
+bool FMState::getStateChanged(){
+    bool change = this->stateChanged;
+    this->stateChanged = false;
+    return change;
+}
+
 /**
  * This resets all RDS parameters to their default values.
  * This should be called anytime the frequency changes (except if the frequency changes due to AF).
@@ -31,9 +37,11 @@ void FMState::reset(){
  * Changes the frequency that the tuner is tuned to.
  */
 void FMState::setFrequency(uint16_t currentFrequency){
-  this->frequency = currentFrequency;
+    if (this->frequency != currentFrequency)
+        this->stateChanged = true;
+    this->frequency = currentFrequency;
 
-  this->reset();
+    this->reset();
 }
 
 /**
@@ -41,6 +49,7 @@ void FMState::setFrequency(uint16_t currentFrequency){
  * @param step an integer specifing the step in multiples of 10kHz.
  */
 void FMState::incrementFrequency(int step){
+    this->stateChanged = true;
     this->frequency += step;
     if (this->frequency > FM_BAND_URANGE)
         this->frequency = FM_BAND_LRANGE;
@@ -58,6 +67,7 @@ void FMState::incrementFrequency(){
  * @param step an integer specifing the step in multiples of 10kHz.
  */
 void FMState::decrementFrequency(int step){
+    this->stateChanged = true;
     this->frequency -= step;
     if (this->frequency < FM_BAND_LRANGE)
         this->frequency = FM_BAND_URANGE;
@@ -75,7 +85,8 @@ void FMState::decrementFrequency(){
  * @param stereo a bool value representing whether the station is in stereo or not.
  */
 void FMState::setStereo(bool stereo){
-  this->hasStereo = stereo;
+    this->stateChanged = this->hasStereo != stereo;
+    this->hasStereo = stereo;
 }
 
 /**
@@ -83,9 +94,10 @@ void FMState::setStereo(bool stereo){
  * @param signalStrength the signal strength between 0-3.
  */
 void FMState::setSignalStrength(int signalStrength){
-  if (signalStrength >= 0 && signalStrength <= 3)
-    this->signalStrength = signalStrength;
-  else this->signalStrength = 0;
+    this->stateChanged = this->signalStrength != signalStrength;
+    if (signalStrength >= 0 && signalStrength <= 3)
+        this->signalStrength = signalStrength;
+    else this->signalStrength = 0;
 }
 
 /**
@@ -93,7 +105,8 @@ void FMState::setSignalStrength(int signalStrength){
  * @param rds a bool value representing whether the station has RDS data or not.
  */
 void FMState::setRDS(bool rds){
-  this->hasRds = rds;
+    this->stateChanged = this->hasRds != rds;
+    this->hasRds = rds;
 }
 
 /**
@@ -101,8 +114,10 @@ void FMState::setRDS(bool rds){
  * @param rds_ps the program service value
  */
 void FMState::setRdsPS(char * rds_ps){
-  this->ps = String(rds_ps).substring(0, 8);
-  this->hasRds = true;
+    String nps = String(rds_ps).substring(0, 8);
+    this->stateChanged = !this->ps.equals(nps);
+    this->ps = nps;
+    this->hasRds = true;
 }
 
 /**
@@ -111,8 +126,9 @@ void FMState::setRdsPS(char * rds_ps){
  * @param rds_pty the station's PTY value.
  */
 void FMState::setRdsPTY(int rds_pty){
-  this->pty = rds_pty;
-  this->hasRds = true;
+    this->stateChanged = this->pty != rds_pty;
+    this->pty = rds_pty;
+    this->hasRds = true;
 }
 
 /**
@@ -120,8 +136,10 @@ void FMState::setRdsPTY(int rds_pty){
  * @param rds_rt the station's radiotext field.
  */
 void FMState::setRdsRT(char * rds_rt) {
-  this->rt = String(rds_rt).substring(0, 128);
-  this->hasRds = true;
+    String nrt = String(rds_rt).substring(0, 128);
+    this->stateChanged = !this->rt.equals(nrt);
+    this->rt = nrt;
+    this->hasRds = true;
 }
 
 void FMState::setVolume(int vol){

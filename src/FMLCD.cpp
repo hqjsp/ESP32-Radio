@@ -114,59 +114,61 @@ void MainScreen::init(){
 }
 
 void MainScreen::tick() {
-  if(this->needsUpdate()){
+  if(this->needsUpdate() || this->state->getStateChanged()){
     this->lcd->clear();
     this->lcd->setCursor(1, 0);
 
-    // display the frequency (only if the lcd has more than 2 lines, or there is no RDS.)
-    if (LCD_HEIGHT > 2 || !this->state->hasRds){
-      this->lcd->print(((float)this->state->frequency / 100.0f));
-      this->lcd->print(" MHz");
-    }
+    // draw the frequency
+    #if LCD_HEIGHT == 2
+      if (!this->state->hasRds){
+    #endif
+      this->lcd->printf("%.2f MHz", ((float)this->state->frequency / 100.0f));
+    #if LCD_HEIGHT == 2
+      }
+    #endif
 
-    // display the Stereo indicator
-    if(this->state->hasStereo){
+    if (this->state->hasStereo){
+      #if LCD_WIDTH < 17 && LCD_HEIGHT > 2
+      if(this->state->hasRds) this->lcd->setCursor(LCD_WIDTH - 6, 1);
+      else this->lcd->setCursor(LCD_WIDTH - 4, 0);
+      #else
       this->lcd->setCursor(LCD_WIDTH - 5, 0);
+      #endif
       this->lcd->print("ST");
     }
 
     this->lcd->setCursor(LCD_WIDTH - 2, 0);
     this->lcd->write(byte(0));
-    if (this->state->signalStrength > 0 && this->state->signalStrength <= 3)
+    if (this->state->signalStrength > 0) 
       this->lcd->write(byte(this->state->signalStrength));
 
-    if(this->state->hasRds){
-      // draw the program service text (either below the frequency, or if the display only has 2 lines, where the frequency is usually displayed.)
-      this->lcd->setCursor(0, LCD_HEIGHT > 2 ? 1 : 0);
+    if (this->state->hasRds){
+      #if LCD_HEIGHT > 2
+        this->lcd->setCursor(0, 1);
+      #else
+        this->lcd->setCursor(0, 0);
+      #endif
       this->lcd->print(this->state->ps);
 
-      // draw the RDS icon on the same line as the program service label.
-      if (LCD_HEIGHT > 2){
-        this->lcd->setCursor(LCD_WIDTH - 3, LCD_HEIGHT > 2 ? 1 : 0);
+      #if LCD_HEIGHT > 2
+        this->lcd->setCursor(LCD_WIDTH - 3, 1);
         this->lcd->print("RDS");
 
         // draw the PTY only if the display is a 4 liner.
-        if (LCD_HEIGHT > 3) {
+        #if LCD_HEIGHT > 3
           // draw the PTY text
           this->lcd->setCursor(0, 2);
-          if (this->state->pty != -1)
-            this->lcd->print(pty_values[this->state->pty]);
-          else this->lcd->print("[No PTY]");
-        }
-      }
+          this->lcd->print(this->state->pty != -1 ? pty_values[this->state->pty] : "[No PTY]");
+        #endif
+      #endif
 
-      // display the RT on the lower line of the LCD.
-      if (this->state->rt.length() <= LCD_WIDTH){
-        this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
-        this->lcd->print(this->state->rt.substring(currentWindow-LCD_WIDTH, currentWindow));
-      }
-    }else {
+      this->lcd->setCursor(0, LCD_HEIGHT - 1);
+      this->lcd->print(this->state->rt.substring(currentWindow-LCD_WIDTH, currentWindow));
+    }else{
       // display a no rds available message when there is no RDS.
       this->lcd->setCursor(LCD_WIDTH/2 - 3, LCD_HEIGHT > 3 ? 2 : 1);
       this->lcd->print("No RDS");
     }
-
-    // draw signal strength meter
 
     this->hasUpdatedScreen();
   }
@@ -174,18 +176,15 @@ void MainScreen::tick() {
   if (this->state->hasRds && this->state->rt.length() > LCD_WIDTH){
     this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
 
-    if (++this->currentWindow > this->state->rt.length()){
-      if (++this->wait > SCROLL_WAITING_TIME){
-        this->currentWindow = LCD_WIDTH;
+    if (this->currentWindow == LCD_WIDTH || this->currentWindow >= this->state->rt.length()){
+      this->wait++;
+      if (this->wait >= SCROLL_WAITING_TIME){
+        if (this->currentWindow == LCD_WIDTH)
+          this->currentWindow++;
+        else this->currentWindow = LCD_WIDTH;
         this->wait = 0;
       }
-      else this->currentWindow--;
-    }
-    if (this->currentWindow == LCD_WIDTH + 1){
-      if (++this->wait < SCROLL_WAITING_TIME){
-        --this->currentWindow;
-      }else this->wait = 0;
-    }
+    }else this->currentWindow++;
 
     this->lcd->print(this->state->rt.substring(currentWindow - LCD_WIDTH, currentWindow));
   }
@@ -256,7 +255,8 @@ void StationListScreen::tick(){
     this->lcd->setCursor(LCD_WIDTH-5, 0);
     this->lcd->printf("%02d/%02d", this->selected+1, this->list->size());
 
-    if (LCD_HEIGHT == 4){
+    #if LCD_HEIGHT == 4
+      
       // checks to see if the selected component is pointing to the beginning/end and adjust the > < selectors, else
       // set the selected line on the lcd to the third line.
       int currentY = (this->selected == 0) ? 1 : (this->selected == this->list->size()-1) ? 3 : 2;
@@ -271,21 +271,16 @@ void StationListScreen::tick(){
       else if (index+2 > this->list->size()-1)
         index = this->list->size() - 3;
 
-      if (LCD_WIDTH >= 20){
-        for (int i = 0; i < 3; i++){
-          this->lcd->setCursor(2, i+1);
-          FMStationItem *item = this->list->get(index + i);
-          this->lcd->printf("% 3.1f: %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
-        }
-      }else{
-        for (int i = 0; i < 3; i++){
-          this->lcd->setCursor(2, i+1);
-          FMStationItem *item = this->list->get(index + i);
-          if (item->hasRds()) this->lcd->print(item->getRdsPS()); 
-          else this->lcd->printf("% 3.1f MHz", ((float)item->getFrequency() / 100.0f));
-        }
+      for (int i = 0; i < 3; i++){
+        this->lcd->setCursor(1, i+1);
+        FMStationItem *item = this->list->get(index + i);
+        #if LCD_WIDTH >= 20 
+          this->lcd->printf("% 6.1f  %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
+        #else 
+          this->lcd->printf("% 6.1f MHz", ((float)item->getFrequency() / 100.0f));
+        #endif
       }
-    }else{
+    #else
       this->lcd->setCursor(0, LCD_HEIGHT - 1);
       this->lcd->print("<");
       this->lcd->setCursor(LCD_WIDTH-1, LCD_HEIGHT - 1);
@@ -296,19 +291,17 @@ void StationListScreen::tick(){
         index = this->list->size() - 1;
       else if (index >= this->list->size())
         index = 0;
-      
-      FMStationItem *item = this->list->get(index);
-      this->lcd->setCursor(2, LCD_HEIGHT - 1);
-      
-      if (LCD_WIDTH >= 20){
-          this->lcd->printf("% 3.1f: %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
-      }else {
-          if (item->hasRds()) this->lcd->print(item->getRdsPS()); 
-          else this->lcd->printf("% 3.1f MHz", ((float)item->getFrequency() / 100.0f));
-      }
-    }
 
-    
+      FMStationItem *item = this->list->get(index);
+      this->lcd->setCursor(1, LCD_HEIGHT - 1);
+      
+      #if LCD_WIDTH >= 20
+          this->lcd->printf("% 6.1f  %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
+      #else
+          if (item->hasRds()) this->lcd->printf(" %s", item->getRdsPS()); 
+          else this->lcd->printf("% 6.1f MHz", ((float)item->getFrequency() / 100.0f));
+      #endif
+    #endif
 
     this->hasUpdatedScreen();
   }
@@ -366,11 +359,11 @@ void VolumeScreen::init(){
  * Called in the main loop to update the screen if necessary.
  */
 void VolumeScreen::tick(){
-  if(this->needsUpdate()){
+  if(this->needsUpdate() || this->state->getStateChanged()){
     this->lcd->clear();
     this->lcd->setCursor(0, 0);
 
-    if (LCD_HEIGHT > 2){
+    #if LCD_HEIGHT > 2
 
       if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
         this->lcd->setCursor(1, 0);
@@ -399,7 +392,7 @@ void VolumeScreen::tick(){
       for (int i = this->state->volume; i < 16; i++)
         this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
 
-    }else if (LCD_HEIGHT == 2){
+    #elif LCD_HEIGHT == 2
       this->lcd->setCursor(LCD_WIDTH/2 - 3, 0);
       this->lcd->print("Volume");
       this->lcd->setCursor(LCD_WIDTH/2 - 8, 1);
@@ -407,7 +400,7 @@ void VolumeScreen::tick(){
         this->lcd->write(byte(5));
       for (int i = this->state->volume; i < 16; i++)
         this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
-    }
+    #endif
 
     this->hasUpdatedScreen();
   }

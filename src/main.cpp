@@ -91,6 +91,7 @@ void setScreen(int screenid){
   if (newScr != nullptr){
     delete screen;
     screen = newScr;
+    screen->init();
   }
 }
 
@@ -129,9 +130,12 @@ void setup() {
   screen->refreshOnNextDraw();
 
   // add test stations
-  list->add(new FMStationItem(8860, "Station1"));
-  list->add(new FMStationItem(8900, "Station2"));
-  list->add(new FMStationItem(8940, "Station3"));
+  list->add(new FMStationItem(8860, "TEST FM"));
+  list->add(new FMStationItem(8900, "NATIONAL"));
+  list->add(new FMStationItem(8940, "Electro"));
+  list->add(new FMStationItem(9000, "90 RADIO"));
+  list->add(new FMStationItem(9990, "CLASSIC"));
+  list->add(new FMStationItem(10450, " BEATS "));
   /** end of debug */
 
   // load the main screen
@@ -153,7 +157,6 @@ void loop() {
     }else screen->moveUp(); // if list screen is loaded; move the selected element up one.
 
     buttonPressed = true;
-    screen->refreshOnNextDraw();
   }
   // check if the menu/frequency down button is being pushed
   else if (digitalRead(MENU_DOWN_PIN) == LOW){
@@ -166,7 +169,6 @@ void loop() {
     }else screen->moveDown(); // if list screen is loaded; move the selected element down one.
 
     buttonPressed = true;
-    screen->refreshOnNextDraw();
   }
   // check if the menu/select button is being pushed
   else if (digitalRead(MENU_PIN) == LOW){
@@ -203,6 +205,47 @@ void loop() {
 
 
   // check for RDS data from SI4703 chip
+  if (ticker %26 == 0){
+    if (state->frequency == 10450){
+      state->setRdsPTY(15);
+      state->setRdsPS(" BEATS ");
+      state->setStereo(true);
+      state->setRdsRT("BEATS RADIO 104.5 - The Hottest Beats are on Beats Radio");
+      state->setSignalStrength(2);
+    }
+    if (state->frequency == 9990){
+      state->setRdsPTY(14);
+      state->setRdsPS("CLASSIC");
+      state->setRdsRT("Home of Mozart - 99.9 Classic FM");
+      state->setSignalStrength(1);
+    }
+    if (state->frequency == 9000){
+      state->setRdsPTY(12);
+      state->setRdsPS("90 RADIO");
+      state->setStereo(true);
+      state->setRdsRT("Your Home of 90's");
+      state->setSignalStrength(3);
+    }
+    if (state->frequency == 8940){
+      state->setRdsPTY(15);
+      state->setRdsPS("Electro");
+      state->setStereo(true);
+      state->setRdsRT("Love Electronic Music");
+      state->setSignalStrength(3);
+    }
+    if (state->frequency == 8900){
+      state->setRdsPTY(2);
+      state->setRdsPS("NATIONAL");
+      state->setSignalStrength(1);
+    }
+    if (state->frequency == 8860){
+      state->setRdsPTY(0);
+      state->setRdsPS("TEST FM");
+      state->setStereo(true);
+      state->setRdsRT("This is test radiotext for the ESP radio");
+      state->setSignalStrength(2);
+    }
+  }
 
 
   // check if the screen needs updating, and update it.

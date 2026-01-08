@@ -19,6 +19,8 @@
 #define FM_BAND_URANGE  10800
 
 struct FMState {
+    private:
+        bool stateChanged = false;
     public:
         int8_t volume;
         uint16_t frequency;
@@ -32,6 +34,8 @@ struct FMState {
         int pty;
 
         FMState(uint16_t, uint8_t);
+
+        bool getStateChanged();
 
         void reset();
 
