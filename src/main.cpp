@@ -13,13 +13,12 @@
 #define SI4703_RDS_PIN    2
 #define SI4703_SEEK_PIN  15
 
-LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
-Screen *screen = new MainScreen(&lcd, 9990);
-Screen *currentScreen = screen;
 
-uint16_t frequency = 9990;
-int currentVolume = 4;
-int currentSignal = 0;
+LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
+FMState *state = new FMState(9990, 6);
+FMStationList *list = new FMStationList();
+
+Screen *screen = new MainScreen(&lcd, state);
 
 const char signal_0[] = {
   B00000,
@@ -67,6 +66,25 @@ const char signal_char[] = {
 
 int ticker = 0;
 
+void setScreen(int screenid){
+  Screen *newScr = nullptr;
+  switch(screenid){
+    case MAIN_SCREEN:
+      newScr = new MainScreen(&lcd, state);
+      break;
+    case VOL_SCREEN:
+      newScr = new VolumeScreen(&lcd, state);
+      break;
+    case LIST_SCREEN:
+      newScr = new StationListScreen(&lcd, state, list);
+      break;
+  }
+  if (newScr != nullptr){
+    delete screen;
+    screen = newScr;
+  }
+}
+
 void setup() {
   pinMode(MENU_UP_PIN, INPUT_PULLUP);
   pinMode(MENU_DOWN_PIN, INPUT_PULLUP);
@@ -94,58 +112,73 @@ void setup() {
   screen->setSignalStrength(2);
 
   screen->init();
+
+  // add test stations
+  list->add(new FMStationItem(8860, "Station1"));
+  list->add(new FMStationItem(8900, "Station2"));
+  list->add(new FMStationItem(8940, "Station3"));
 }
+
+void setStreen(int screenid);
 
 void loop() {
   // put your main code here, to run repeatedly:
   delay(75);
 
   if(digitalRead(MENU_UP_PIN) == LOW){
-    frequency += 10;
-    if (frequency > 10800)
-      frequency = 8750;
+    if (screen->getType() != LIST_SCREEN){
+      state->frequency += 10;
+      if (state->frequency > 10800)
+        state->frequency = 8750;
 
-    currentScreen->setFrequency(frequency);
+      screen->setFrequency(state->frequency);
+    }else{
+      screen->moveUp();
+    }
     
     delay(25);
 
     // set frequency on SI4703 chip
   }
   if (digitalRead(MENU_DOWN_PIN) == LOW){
-    frequency -= 10;
-    if (frequency < 8750)
-      frequency = 10800;
-    currentScreen->setFrequency(frequency);
+    if (screen->getType() != LIST_SCREEN){
+      state->frequency -= 10;
+      if (state->frequency < 8750)
+        state->frequency = 10800;
+      screen->setFrequency(state->frequency);
+    }else{
+      screen->moveDown();
+    }
 
     delay(25);
     // set frequency on SI4703 chip
   }
   if (digitalRead(MENU_PIN) == LOW){
-    currentSignal = (currentSignal+1)%4;
-    currentScreen->setSignalStrength(currentSignal);
+    //currentSignal = (currentSignal+1)%4;
+    //screen->setSignalStrength(currentSignal);
+    if (screen->getType() != LIST_SCREEN){
+      setScreen(LIST_SCREEN);
+      ticker = 0;
+    }else if (screen->getType() == LIST_SCREEN){
+      FMStationItem *selected = list->get(screen->select());
+      state->reset();
+      state->frequency = selected->getFrequency();
+      state->hasRds = selected->hasRds();
+      state->ps = selected->getRdsPS();
+      setScreen(MAIN_SCREEN);
+    }
     delay(25);
   }
   if (digitalRead(VOLUME_UP_PIN) == LOW){
     // set volume on SI4703 chip
-    if (currentScreen->getType() != VOL_SCREEN){
-      Screen *scr = new VolumeScreen(&lcd, frequency, currentVolume);
-      scr->moveData(screen);
-      currentScreen = scr;
-    }
-    currentScreen->moveUp();
-    currentVolume++;
+    if (screen->getType() != VOL_SCREEN) setScreen(VOL_SCREEN);
+    screen->moveUp();
     ticker = 0;
     delay(25);
   }
   if (digitalRead(VOLUME_DN_PIN) == LOW){
-    if (currentScreen->getType() != VOL_SCREEN){
-      Screen *scr = new VolumeScreen(&lcd, frequency, currentVolume);
-      scr->moveData(screen);
-      currentScreen = scr;
-      ticker = 0;
-    }
-    currentScreen->moveDown();
-    currentVolume--;
+    if (screen->getType() != VOL_SCREEN) setScreen(VOL_SCREEN);
+    screen->moveDown();
     ticker = 0;
     delay(25);
   }
@@ -153,17 +186,10 @@ void loop() {
   // check for RDS data from SI4703 chip
 
 
-  if (ticker%3 == 0) currentScreen->tick();
+  if (ticker%3 == 0) screen->tick();
 
-  if(ticker++ > 40){
-     ticker = 0;
-    if (currentScreen->getType() != MAIN_SCREEN){
-      screen->moveData(currentScreen);
-      if (currentScreen->getType() == VOL_SCREEN)
-        currentVolume = currentScreen->select();
-      Screen *old = currentScreen;
-      currentScreen = screen;
-      delete old;
-    }
+  if(ticker++ > 40 && screen->getType() != LIST_SCREEN){
+    ticker = 0;
+    if (screen->getType() != MAIN_SCREEN) setScreen(MAIN_SCREEN);
   }
 }

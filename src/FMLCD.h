@@ -5,6 +5,8 @@
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
 
+#include "FMState.h"
+
 #define SCROLL_WAITING_TIME  10
 #define LCD_WIDTH            20   // width for screen scrolling
 #define LCD_HEIGHT            4   // determines what is displayed.
@@ -17,16 +19,9 @@ class Screen {
   protected:
     int screenType;
     LiquidCrystal_I2C* lcd;
-    bool update = false;
+    bool update = true;
     
-    uint16_t frequency;
-    uint8_t signalStrength;
-    bool hasStereo = false;
-
-    bool hasRds = false;
-    String ps;
-    String rt;
-    int pty;
+    FMState *state;
 
     void refreshOnNextDraw();
     bool needsUpdate();
@@ -34,8 +29,7 @@ class Screen {
 
     void clearLine(int y);
   public:
-    Screen(LiquidCrystal_I2C*, uint16_t);
-    Screen(LiquidCrystal_I2C*);
+    Screen(LiquidCrystal_I2C*, FMState*);
 
     const int getType();
 
@@ -67,11 +61,10 @@ class Screen {
 
 class StationListScreen : public Screen {
   private:
-    char** selectionList;
+    FMStationList *list;
     int selected = 0;
-    int sizeofList = 0;
   public:
-    StationListScreen(LiquidCrystal_I2C*, int, char**);
+    StationListScreen(LiquidCrystal_I2C*, FMState*, FMStationList*);
     void moveDown() override;
     void moveUp() override;
     int select() override;
@@ -88,7 +81,7 @@ class MainScreen : public Screen {
 
   public:
     /** Draws the main screen. First parameter is the LCD API, the second is the current frequency. */
-    MainScreen(LiquidCrystal_I2C*, uint16_t);
+    MainScreen(LiquidCrystal_I2C*, FMState*);
 
     void setRdsRT(char*);
 
@@ -98,10 +91,8 @@ class MainScreen : public Screen {
 
 
 class VolumeScreen : public MainScreen {
-    private:
-        int volume;
     public:
-        VolumeScreen(LiquidCrystal_I2C*, uint16_t, int);
+        VolumeScreen(LiquidCrystal_I2C*, FMState*);
 
         void moveUp() override;
         void moveDown() override;
