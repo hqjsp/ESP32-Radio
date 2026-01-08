@@ -1,12 +1,26 @@
+/**
+ * ESP-32 Radio
+ * 
+ * FMState.h
+ * 
+ */
+
+
 #ifndef FMSTATE_H
 #define FMSTATE_H
 
 #include <Arduino.h>
 #include <vector>
 
+// FM Band values
+#define FM_STEP            10
+#define FM_BAND_LRANGE   8750
+#define FM_DEFAULT_FREQ  9990
+#define FM_BAND_URANGE  10800
+
 struct FMState {
     public:
-        uint8_t volume;
+        int8_t volume;
         uint16_t frequency;
         uint8_t signalStrength;
 
@@ -20,6 +34,24 @@ struct FMState {
         FMState(uint16_t, uint8_t);
 
         void reset();
+
+        void setRDS(bool);
+        void setRdsPS(char*);
+        void setRdsRT(char*);
+        void setRdsPTY(int pty);
+        
+        void setStereo(bool);
+        
+        void setFrequency(uint16_t);
+        void incrementFrequency(int step);
+        void incrementFrequency();
+        void decrementFrequency(int step);
+        void decrementFrequency();
+        void setSignalStrength(int signalStrength);
+
+        void setVolume(int);
+        void incrementVolume();
+        void decrementVolume();
 };
 
 class FMStationItem {
@@ -35,8 +67,6 @@ class FMStationItem {
         String getRdsPS();
         uint16_t getFrequency();
         bool hasRds();
-
-        const char *toString();
 
         bool operator==(const FMStationItem& r);
 };

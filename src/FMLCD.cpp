@@ -1,3 +1,12 @@
+/**
+ * ESP-32 Radio
+ * 
+ * FMLCD.cpp
+ * 
+ * These files contain all user interface related functions.
+ * Each class' init() and tick() methods can be modified to change the layout of the ui
+ */
+
 
 #include "FMLCD.h"
 
@@ -62,67 +71,11 @@ void Screen::clearLine(int y){
     this->lcd->print(" ");
 }
 
-void Screen::setFrequency(uint16_t currentFrequency){
-  this->state->frequency = currentFrequency;
-
-  this->state->reset();
-
-  this->init();
-}
-
-void Screen::setStereo(bool stereo){
-  this->state->hasStereo = stereo;
-  this->refreshOnNextDraw();
-}
-
-void Screen::setSignalStrength(int signalStrength){
-  if (signalStrength >= 0 && signalStrength <= 3)
-    this->state->signalStrength = signalStrength;
-  else this->state->signalStrength = 0;
-  this->refreshOnNextDraw();
-}
-
-void Screen::setRDS(bool rds){
-  this->state->hasRds = rds;
-  this->refreshOnNextDraw();
-}
-
-void Screen::setRdsPS(char * rds_ps){
-  this->state->ps = String(rds_ps).substring(0, 8);
-  this->state->hasRds = true;
-  this->refreshOnNextDraw();
-}
-
-void Screen::setRdsPTY(int rds_pty){
-  this->state->pty = rds_pty;
-  this->state->hasRds = true;
-  this->refreshOnNextDraw();
-}
-
-void Screen::setRdsRT(char * rds_rt) {
-  this->state->rt = String(rds_rt).substring(0, 128);
-  this->state->hasRds = true;
-  this->refreshOnNextDraw();
-}
-
-void Screen::moveData(Screen *scr) {
-  /*this->frequency = scr->frequency;
-  this->hasRds = scr->hasRds;
-  this->hasStereo = scr->hasStereo;
-  this->lcd = scr->lcd;
-  this->ps = scr->ps;
-  this->pty = scr->pty;
-  this->rt = scr->rt;
-  this->signalStrength = scr->signalStrength;
-  this->refreshOnNextDraw();*/
-}
-
 const int Screen::getType(){
   return this->screenType;
 }
 
 void Screen::init() {}
-
 void Screen::tick() {}
 
 void Screen::moveDown() {}
@@ -130,12 +83,13 @@ void Screen::moveUp() {}
 int Screen::select() {}
 
 
+
 MainScreen::MainScreen(LiquidCrystal_I2C* lcd, FMState *state) : Screen(lcd, state){
   this->screenType = MAIN_SCREEN;
 }
 
-void MainScreen::setRdsRT(char * rds_rt) {
-  Screen::setRdsRT(rds_rt);
+void MainScreen::refreshOnNextDraw() {
+  Screen::refreshOnNextDraw();
 
   this->currentWindow = LCD_WIDTH;
   this->wait = 0;
@@ -206,10 +160,10 @@ void MainScreen::tick() {
         this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
         this->lcd->print(this->state->rt.substring(currentWindow-LCD_WIDTH, currentWindow));
       }
-    }else if (LCD_HEIGHT > 2){
+    }else {
       // display a no rds available message when there is no RDS.
-      this->lcd->setCursor(LCD_WIDTH/2 - 8, 2);
-      this->lcd->print("No RDS available");
+      this->lcd->setCursor(LCD_WIDTH/2 - 3, LCD_HEIGHT > 3 ? 2 : 1);
+      this->lcd->print("No RDS");
     }
 
     // draw signal strength meter
@@ -238,13 +192,7 @@ void MainScreen::tick() {
 }
 
 
-/*
- *  StationListScreen class impl.
- *  extends Screen
- *
- *  This manages the selection list functionality. Mainly for when the user wants to scroll through the available
- *  stations to select something fast. Allows the user to go up and down the list and select something.
-*/
+
 
 /**
  * @param lcd A pointer to the main LCD
@@ -303,45 +251,69 @@ void StationListScreen::tick(){
 
     this->lcd->clear();
     this->lcd->setCursor(0, 0);
-    this->lcd->print("Station List");
+    this->lcd->print("Stations");
 
     this->lcd->setCursor(LCD_WIDTH-5, 0);
     this->lcd->printf("%02d/%02d", this->selected+1, this->list->size());
 
-    // checks to see if the selected component is pointing to the beginning/end and adjust the > < selectors, else
-    // set the selected line on the lcd to the third line.
-    int currentY = (this->selected == 0) ? 1 : (this->selected == this->list->size()-1) ? 3 : 2;
-    this->lcd->setCursor(0, currentY);
-    this->lcd->print(">");
-    this->lcd->setCursor(19, currentY);
-    this->lcd->print("<");
+    if (LCD_HEIGHT == 4){
+      // checks to see if the selected component is pointing to the beginning/end and adjust the > < selectors, else
+      // set the selected line on the lcd to the third line.
+      int currentY = (this->selected == 0) ? 1 : (this->selected == this->list->size()-1) ? 3 : 2;
+      this->lcd->setCursor(0, currentY);
+      this->lcd->print(">");
+      this->lcd->setCursor(LCD_WIDTH-1, currentY);
+      this->lcd->print("<");
 
-    int index = this->selected - 1;
-    if (index < 0)
-      index = 0;
-    else if (index+2 > this->list->size()-1)
-      index = this->list->size() - 3;
+      int index = this->selected - 1;
+      if (index < 0)
+        index = 0;
+      else if (index+2 > this->list->size()-1)
+        index = this->list->size() - 3;
 
-    for (int i = 0; i < 3; i++){
-      this->lcd->setCursor(2, i+1);
-      FMStationItem *item = this->list->get(index + i);
-      this->lcd->print(((float)item->getFrequency() / 100.0f));
-      this->lcd->print(": ");
-      this->lcd->print(item->getRdsPS()); 
+      if (LCD_WIDTH >= 20){
+        for (int i = 0; i < 3; i++){
+          this->lcd->setCursor(2, i+1);
+          FMStationItem *item = this->list->get(index + i);
+          this->lcd->printf("% 3.1f: %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
+        }
+      }else{
+        for (int i = 0; i < 3; i++){
+          this->lcd->setCursor(2, i+1);
+          FMStationItem *item = this->list->get(index + i);
+          if (item->hasRds()) this->lcd->print(item->getRdsPS()); 
+          else this->lcd->printf("% 3.1f MHz", ((float)item->getFrequency() / 100.0f));
+        }
+      }
+    }else{
+      this->lcd->setCursor(0, LCD_HEIGHT - 1);
+      this->lcd->print("<");
+      this->lcd->setCursor(LCD_WIDTH-1, LCD_HEIGHT - 1);
+      this->lcd->print(">");
+
+      int index = this->selected;
+      if (index < 0)
+        index = this->list->size() - 1;
+      else if (index >= this->list->size())
+        index = 0;
+      
+      FMStationItem *item = this->list->get(index);
+      this->lcd->setCursor(2, LCD_HEIGHT - 1);
+      
+      if (LCD_WIDTH >= 20){
+          this->lcd->printf("% 3.1f: %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());
+      }else {
+          if (item->hasRds()) this->lcd->print(item->getRdsPS()); 
+          else this->lcd->printf("% 3.1f MHz", ((float)item->getFrequency() / 100.0f));
+      }
     }
+
+    
 
     this->hasUpdatedScreen();
   }
 }
 
-
-/*
- *  VolumeScreen class impl.
- *  extends MainScreen, Screen
- *
- *  This is called when the radio needs to display the volume information - ie the user is adjusting the volume.
- *  The tick method can be adjusted to modify the user interface for this.
-*/
 
 
 /**
@@ -357,8 +329,7 @@ VolumeScreen::VolumeScreen(LiquidCrystal_I2C* lcd, FMState *state) : MainScreen(
  * Increments the volume by 1 up to a maximum of 15. (Maximum for the SI470x library)
  */
 void VolumeScreen::moveUp() {
-    if (++this->state->volume > 15)
-      this->state->volume = 15;
+    this->state->incrementVolume();
 
     this->refreshOnNextDraw();
 }
@@ -367,10 +338,9 @@ void VolumeScreen::moveUp() {
  * Decrements the volume by 1 down to 0.
  */
 void VolumeScreen::moveDown(){
-    if (--this->state->volume < 0)
-        this->state->volume = 0;
+  this->state->decrementVolume();
       
-    this->refreshOnNextDraw();
+  this->refreshOnNextDraw();
 }
 
 /**
@@ -400,30 +370,44 @@ void VolumeScreen::tick(){
     this->lcd->clear();
     this->lcd->setCursor(0, 0);
 
+    if (LCD_HEIGHT > 2){
 
-    if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
-      this->lcd->setCursor(1, 0);
-      this->lcd->print(((float)this->state->frequency / 100.0f));
-      this->lcd->print(" MHz");
-    }else{
-      this->lcd->print(this->state->ps);
+      if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
+        this->lcd->setCursor(1, 0);
+        this->lcd->print(((float)this->state->frequency / 100.0f));
+        this->lcd->print(" MHz");
+      }else{
+        this->lcd->print(this->state->ps);
+      }
+
+      // display the Stereo indicator
+      if(this->state->hasStereo){
+        this->lcd->setCursor(LCD_WIDTH - 5, 0);
+        this->lcd->print("ST");
+      }
+
+      this->lcd->setCursor(LCD_WIDTH - 2, 0);
+      this->lcd->write(byte(0));
+      if (this->state->signalStrength > 0 && this->state->signalStrength <= 3)
+        this->lcd->write(byte(this->state->signalStrength));
+      
+      this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
+      this->lcd->print("Volume");
+      this->lcd->setCursor(LCD_WIDTH/2 - 8, 2);
+      for (int i = 0; i < this->state->volume; i++)
+        this->lcd->write(byte(5));
+      for (int i = this->state->volume; i < 16; i++)
+        this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
+
+    }else if (LCD_HEIGHT == 2){
+      this->lcd->setCursor(LCD_WIDTH/2 - 3, 0);
+      this->lcd->print("Volume");
+      this->lcd->setCursor(LCD_WIDTH/2 - 8, 1);
+      for (int i = 0; i < this->state->volume; i++)
+        this->lcd->write(byte(5));
+      for (int i = this->state->volume; i < 16; i++)
+        this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
     }
-
-    // display the Stereo indicator
-    if(this->state->hasStereo){
-      this->lcd->setCursor(LCD_WIDTH - 5, 0);
-      this->lcd->print("ST");
-    }
-
-    this->lcd->setCursor(LCD_WIDTH - 2, 0);
-    this->lcd->write(byte(0));
-    if (this->state->signalStrength > 0 && this->state->signalStrength <= 3)
-      this->lcd->write(byte(this->state->signalStrength));
-    
-    this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
-    this->lcd->print("Volume");
-    this->lcd->setCursor(LCD_WIDTH/2 - 1, 2);
-    this->lcd->printf("%02d", this->state->volume);
 
     this->hasUpdatedScreen();
   }

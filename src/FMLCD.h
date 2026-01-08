@@ -1,6 +1,18 @@
-#include "WString.h"
+/**
+ * ESP-32 Radio
+ * 
+ * FMLCD.h
+ * 
+ * These files contain all user interface related functions.
+ * Each class' init() and tick() methods can be modified to change the layout of the ui
+ */
+
+
 #ifndef FMLCD_H
 #define FMLCD_H
+
+
+#include "WString.h"
 
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
@@ -18,6 +30,7 @@
 /** Volume Screen ID */
 #define VOL_SCREEN  0x15
 
+
 class Screen {
   protected:
     int screenType;
@@ -26,7 +39,6 @@ class Screen {
     
     FMState *state;
 
-    void refreshOnNextDraw();
     bool needsUpdate();
     void hasUpdatedScreen();
 
@@ -43,25 +55,16 @@ class Screen {
     virtual void moveUp();
     virtual int select();
 
-    /* Sets whether there is RDS or not. If not then an 'No RDS Available' message is shown. This will update the display on the next tick. */
-    void setRDS(bool);
-    /* Sets the RDS Program Service label. This will update the display on the next tick. */
-    void setRdsPS(char*);
-    /* Sets the RDS Radiotext. This will update the display on the next tick. */
-    virtual void setRdsRT(char*);
-    /* Sets the RDS Program Type. This will update the display on the next tick. */
-    void setRdsPTY(int pty);
-    /* Sets whether Stereo is available. Purely controls the Stereo Icon. This will update the display on the next tick. */
-    void setStereo(bool);
-    /* Sets the Frequency displayed on the LCD. This will update the display on the next tick. */
-    void setFrequency(uint16_t);
-    /* Sets the Signal Strength for the FM signal. Will update the signal meter on the display. */
-    void setSignalStrength(int signalStrength);
-
-    void moveData(Screen *scr);
+    virtual void refreshOnNextDraw();
 };
 
-
+/*
+ *  StationListScreen class
+ *  extends Screen
+ *
+ *  This manages the selection list functionality. Mainly for when the user wants to scroll through the available
+ *  stations to select something fast. Allows the user to go up and down the list and select something.
+*/
 class StationListScreen : public Screen {
   private:
     FMStationList *list;
@@ -86,13 +89,19 @@ class MainScreen : public Screen {
     /** Draws the main screen. First parameter is the LCD API, the second is the current frequency. */
     MainScreen(LiquidCrystal_I2C*, FMState*);
 
-    void setRdsRT(char*);
+    void refreshOnNextDraw();
 
     void init();
     void tick();
 };
 
-
+/*
+ *  VolumeScreen class
+ *  extends MainScreen, Screen
+ *
+ *  This is called when the radio needs to display the volume information - ie the user is adjusting the volume.
+ *  The tick method can be adjusted to modify the user interface for this.
+*/
 class VolumeScreen : public MainScreen {
     public:
         VolumeScreen(LiquidCrystal_I2C*, FMState*);
