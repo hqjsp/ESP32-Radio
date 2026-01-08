@@ -305,6 +305,9 @@ void StationListScreen::tick(){
     this->lcd->setCursor(0, 0);
     this->lcd->print("Station List");
 
+    this->lcd->setCursor(LCD_WIDTH-5, 0);
+    this->lcd->printf("%02d/%02d", this->selected+1, this->list->size());
+
     // checks to see if the selected component is pointing to the beginning/end and adjust the > < selectors, else
     // set the selected line on the lcd to the third line.
     int currentY = (this->selected == 0) ? 1 : (this->selected == this->list->size()-1) ? 3 : 2;
@@ -395,12 +398,16 @@ void VolumeScreen::init(){
 void VolumeScreen::tick(){
   if(this->needsUpdate()){
     this->lcd->clear();
-    this->lcd->setCursor(1, 0);
+    this->lcd->setCursor(0, 0);
 
-    this->lcd->setCursor(1, 0);
 
-    this->lcd->print(((float)this->state->frequency / 100.0f));
-    this->lcd->print(" MHz");
+    if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
+      this->lcd->setCursor(1, 0);
+      this->lcd->print(((float)this->state->frequency / 100.0f));
+      this->lcd->print(" MHz");
+    }else{
+      this->lcd->print(this->state->ps);
+    }
 
     // display the Stereo indicator
     if(this->state->hasStereo){

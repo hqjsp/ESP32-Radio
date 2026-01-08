@@ -11,8 +11,11 @@
 #define LCD_WIDTH            20   // width for screen scrolling
 #define LCD_HEIGHT            4   // determines what is displayed.
 
+/** Main Screen ID */
 #define MAIN_SCREEN 0x13
+/** List Screen ID */
 #define LIST_SCREEN 0x14
+/** Volume Screen ID */
 #define VOL_SCREEN  0x15
 
 class Screen {
