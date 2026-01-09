@@ -30,6 +30,7 @@
 /** Volume Screen ID */
 #define VOL_SCREEN  0x15
 
+#define CLEAR_SCREEN_INSTEAD_OF_WRITE
 
 class Screen {
   protected:
@@ -42,7 +43,7 @@ class Screen {
     bool needsUpdate();
     void hasUpdatedScreen();
 
-    void clearLine(int y);
+    void clearLine(int line);
   public:
     Screen(LiquidCrystal_I2C*, FMState*);
 

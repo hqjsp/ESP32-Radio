@@ -25,6 +25,7 @@
 
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
+
 #include "FMLCD.h"
 
 /** The frequency/menu up button pin */
@@ -47,8 +48,10 @@
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY       50
+#define UPDATE_DELAY       100
 #define TMP_SCR_SHOWTIME   35
+#define DEBOUNCE_DELAY  150
+
 
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 
@@ -71,27 +74,99 @@ const char meter_full[] = {B00000,B11111,B11111,B11111,B11111,B11111,B11111,B111
 // are still able to be done.
 int ticker = 0;
 
-/**
- * Changes the shown screen based on the screen id. These are found in the FMLCD.h header file
- * @param screenid The screen to load.
-*/
-void setScreen(int screenid){
-  Screen *newScr = nullptr;
-  switch(screenid){
-    case MAIN_SCREEN:
-      newScr = new MainScreen(&lcd, state);
-      break;
-    case VOL_SCREEN:
-      newScr = new VolumeScreen(&lcd, state);
-      break;
-    case LIST_SCREEN:
-      newScr = new StationListScreen(&lcd, state, list);
-      break;
+namespace ESPRadio {
+
+    volatile unsigned long lastPressedTime = 0;
+    volatile bool buttonPressed = false;
+
+    void setScreen(int screenid){
+      Screen *newScr = nullptr;
+          switch(screenid){
+              case MAIN_SCREEN:
+              newScr = new MainScreen(&lcd, state);
+              break;
+              case VOL_SCREEN:
+              newScr = new VolumeScreen(&lcd, state);
+              break;
+              case LIST_SCREEN:
+              newScr = new StationListScreen(&lcd, state, list);
+              break;
+          }
+          if (newScr != nullptr){
+              delete screen;
+              screen = newScr;
+              screen->init();
+          }
+    }
+    void pollButton(uint8_t pin, int level, void(*callback)()){
+      if (digitalRead(pin) == level){
+        callback();
+        ESPRadio::buttonPressed = true;
+      }
+    }
+
+    bool debounce(){
+      unsigned long now = millis();
+
+      if (now - ESPRadio::lastPressedTime > DEBOUNCE_DELAY){
+        ESPRadio::lastPressedTime = now;
+        return true;
+      }
+
+      return false;
+    }
+};
+
+void menu_up(){
+  if (ESPRadio::debounce()){
+    if (screen->getType() != LIST_SCREEN){
+      state->incrementFrequency();
+    }else screen->moveUp();
   }
-  if (newScr != nullptr){
-    delete screen;
-    screen = newScr;
-    screen->init();
+}
+
+void menu_down(){
+  if (ESPRadio::debounce()){
+    if (screen->getType() != LIST_SCREEN){
+      state->decrementFrequency();
+    }else screen->moveDown();
+  }
+}
+
+void menu_select(){
+  if (ESPRadio::debounce()){
+    if (screen->getType() != LIST_SCREEN){  // load the station list screen
+      ESPRadio::setScreen(LIST_SCREEN);
+      ticker = 0;
+    }else if (screen->getType() == LIST_SCREEN){  // get the selected element from the list screen and tune
+      FMStationItem *selected = list->get(screen->select());
+      state->reset();
+      state->setFrequency(selected->getFrequency());
+      state->setRDS(selected->hasRds());
+      state->setRdsPS(selected->getRdsPS());
+      ESPRadio::setScreen(MAIN_SCREEN);
+
+        // SI4703 tune
+    }
+    screen->refreshOnNextDraw();
+  }
+}
+
+void vol_up(){
+  if (ESPRadio::debounce()){
+    if (screen->getType() != VOL_SCREEN) 
+      ESPRadio::setScreen(VOL_SCREEN);
+    screen->moveUp();
+    ticker = 0;
+  }
+}
+
+void vol_down(){
+  if (ESPRadio::debounce()){
+    if (screen->getType() != VOL_SCREEN) 
+      ESPRadio::setScreen(VOL_SCREEN);
+    screen->moveDown();
+    ticker = 0;
   }
 }
 
@@ -143,120 +218,70 @@ void setup() {
 
 void loop() {
   delay(UPDATE_DELAY);
-  bool buttonPressed = false;
+  ESPRadio::buttonPressed = false;
 
-  // check if the menu/frequency up button is being pushed
-  if(digitalRead(MENU_UP_PIN) == LOW){
-    // change the frequency if the list screen isn't loaded
-    if (screen->getType() != LIST_SCREEN){
-      state->incrementFrequency();
-
-      // set frequency on SI4703 chip
-
-    }else screen->moveUp(); // if list screen is loaded; move the selected element up one.
-
-    buttonPressed = true;
-  }
-  // check if the menu/frequency down button is being pushed
-  else if (digitalRead(MENU_DOWN_PIN) == LOW){
-    // change the frequency if the list screen isn't loaded
-    if (screen->getType() != LIST_SCREEN){
-      
-      state->decrementFrequency();
-
-      // set frequency on SI4703 chip
-    }else screen->moveDown(); // if list screen is loaded; move the selected element down one.
-
-    buttonPressed = true;
-  }
-  // check if the menu/select button is being pushed
-  else if (digitalRead(MENU_PIN) == LOW){
-    if (screen->getType() != LIST_SCREEN){  // load the station list screen
-      setScreen(LIST_SCREEN);
-      ticker = 0;
-    }else if (screen->getType() == LIST_SCREEN){  // get the selected element from the list screen and tune
-      FMStationItem *selected = list->get(screen->select());
-      state->reset();
-      state->frequency = selected->getFrequency();
-      state->hasRds = selected->hasRds();
-      state->ps = selected->getRdsPS();
-      setScreen(MAIN_SCREEN);
-
-      // SI4703 tune
-    }
-    buttonPressed = true;
-    screen->refreshOnNextDraw();
-  }
-
-  // volume stuff
-  if (digitalRead(VOLUME_UP_PIN) == LOW){
-    // set volume on SI4703 chip
-    if (screen->getType() != VOL_SCREEN) setScreen(VOL_SCREEN);
-    screen->moveUp();
-    ticker = 0;
-    buttonPressed = true;
-  }else if (digitalRead(VOLUME_DN_PIN) == LOW){
-    if (screen->getType() != VOL_SCREEN) setScreen(VOL_SCREEN);
-    screen->moveDown();
-    ticker = 0;
-    buttonPressed = true;
-  }
-
+  // check buttons
+  ESPRadio::pollButton(MENU_UP_PIN, LOW, menu_up);
+  ESPRadio::pollButton(MENU_DOWN_PIN, LOW, menu_down);
+  ESPRadio::pollButton(MENU_PIN, LOW, menu_select);
+  ESPRadio::pollButton(VOLUME_UP_PIN, LOW, vol_up);
+  ESPRadio::pollButton(VOLUME_DN_PIN, LOW, vol_down);
 
   // check for RDS data from SI4703 chip
   if (ticker %26 == 0){
-    if (state->frequency == 10450){
-      state->setRdsPTY(15);
-      state->setRdsPS(" BEATS ");
-      state->setStereo(true);
-      state->setRdsRT("BEATS RADIO 104.5 - The Hottest Beats are on Beats Radio");
-      state->setSignalStrength(2);
-    }
-    if (state->frequency == 9990){
-      state->setRdsPTY(14);
-      state->setRdsPS("CLASSIC");
-      state->setRdsRT("Home of Mozart - 99.9 Classic FM");
-      state->setSignalStrength(1);
-    }
-    if (state->frequency == 9000){
-      state->setRdsPTY(12);
-      state->setRdsPS("90 RADIO");
-      state->setStereo(true);
-      state->setRdsRT("Your Home of 90's");
-      state->setSignalStrength(3);
-    }
-    if (state->frequency == 8940){
-      state->setRdsPTY(15);
-      state->setRdsPS("Electro");
-      state->setStereo(true);
-      state->setRdsRT("Love Electronic Music");
-      state->setSignalStrength(3);
-    }
-    if (state->frequency == 8900){
-      state->setRdsPTY(2);
-      state->setRdsPS("NATIONAL");
-      state->setSignalStrength(1);
-    }
-    if (state->frequency == 8860){
-      state->setRdsPTY(0);
-      state->setRdsPS("TEST FM");
-      state->setStereo(true);
-      state->setRdsRT("This is test radiotext for the ESP radio");
-      state->setSignalStrength(2);
+    switch(state->getFrequency()){
+      case 10450:
+        state->setRdsPTY(15);
+        state->setRdsPS(" BEATS ");
+        state->setStereo(true);
+        state->setRdsRT("BEATS RADIO 104.5 - The Hottest Beats are on Beats Radio");
+        state->setSignalStrength(2);
+        break;
+      case 9990:
+        state->setRdsPTY(14);
+        state->setRdsPS("CLASSIC");
+        state->setRdsRT("Home of Mozart - 99.9 Classic FM");
+        state->setSignalStrength(1);
+        break;
+      case 9000:
+        state->setRdsPTY(12);
+        state->setRdsPS("90 RADIO");
+        state->setStereo(true);
+        state->setRdsRT("Your Home of 90's");
+        state->setSignalStrength(3);
+        break;
+      case 8940:
+        state->setRdsPTY(15);
+        state->setRdsPS("Electro");
+        state->setStereo(true);
+        state->setRdsRT("Love Electronic Music");
+        state->setSignalStrength(3);
+        break;
+      case 8900:
+        state->setRdsPTY(2);
+        state->setRdsPS("NATIONAL");
+        state->setSignalStrength(1);
+        break;
+      case 8860:
+        state->setRdsPTY(0);
+        state->setRdsPS("TEST FM");
+        state->setStereo(true);
+        state->setRdsRT("This is test radiotext for the ESP radio");
+        state->setSignalStrength(2);
+        break;
     }
   }
 
 
   // check if the screen needs updating, and update it.
-  if (ticker%5 == 0 || buttonPressed) screen->tick();
+  if (ticker%3 == 0 || ESPRadio::buttonPressed) 
+    screen->tick();
 
   // change the screen back to the main screen if it is on another screen (except the list screen) and
   // this has been active for x amount of time.
   if(++ticker >= TMP_SCR_SHOWTIME && screen->getType() != LIST_SCREEN){
     ticker = 0;
-    if (screen->getType() != MAIN_SCREEN) setScreen(MAIN_SCREEN);
+    if (screen->getType() != MAIN_SCREEN) 
+      ESPRadio::setScreen(MAIN_SCREEN);
   }
-
-  if (buttonPressed)
-    delay(50);
 }

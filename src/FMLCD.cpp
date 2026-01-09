@@ -10,6 +10,10 @@
 
 #include "FMLCD.h"
 
+/**
+ * RDS Program Type values. Taken from https://en.wikipedia.org/wiki/Radio_Data_System
+ * Modify these if you would like to change what is displayed on the screen for each of these values.
+ */
 const char *pty_values[] = {
   "None",
   "News",
@@ -53,24 +57,32 @@ Screen::Screen(LiquidCrystal_I2C* lcd, FMState *state){
   this->state = state;
 }
 
+/**
+ * Call this method when there is a substantial change to information on the display. This will tell the screen to redraw the whole
+ * screen. This is to reduce LCD flicker as LCD's are slow to redraw - normally only essential information is drawn.
+ */
 void Screen::refreshOnNextDraw(){
   this->update = true;
 }
 
+/**
+ * This should never be called outside of the children of this class. This will return true if the `refreshOnNextDraw()` method was called.
+ */
 bool Screen::needsUpdate(){
   return this->update;
 }
 
+/**
+ * This should never be called outside of the children of this class. This will reset the update flag after the `refreshOnNextDraw()` method is called.
+ * Use this when the whole screen has been updated.
+ */
 void Screen::hasUpdatedScreen(){
   this->update = false;
 }
 
-void Screen::clearLine(int y){
-  this->lcd->setCursor(0, y);
-  for (int i = 0; i < LCD_WIDTH; i++)
-    this->lcd->print(" ");
-}
-
+/**
+ * @return Returns the type of screen. This is used like `instanceof` in other OOP languages to determine what screen is currently being displayed.
+ */
 const int Screen::getType(){
   return this->screenType;
 }
@@ -82,12 +94,43 @@ void Screen::moveDown() {}
 void Screen::moveUp() {}
 int Screen::select() {}
 
+/**
+ * This should be used in the `tick()` method. Clears a line by writing a line of space characters to the LCD. The idea of this method is to clear the screen
+ * line by line to update it. This is used instead of `lcd.clear()` when `CLEAR_SCREEN_INSTEAD_OF_WRITE` is not defined.
+ * @param line the line to clear on the LCD.
+ */
+void Screen::clearLine(int line){
+  this->lcd->setCursor(0, line);
+  this->lcd->print("                    ");
+}
 
 
+/**
+ * This screen displays all information about the radio station, RDS, etc. This looks different depending on screen dimensions (defined in FMLCD.h).
+ * 
+ * - 20x4 LCD:
+ *    `[ [FREQ] MHZ    ST SS]`
+ *    `[[RDS PS]         RDS]`
+ *    `[[RDS PTY]           ]`
+ *    `[[RDS RT (< scrolls)]]`
+ * - 16x3 LCD:
+ *    `[ [FREQ] MHZ   SS]`
+ *    `[[RDS PS]  ST RDS]`
+ *    `[[RDS RT (< scr)]]`
+ * - 16x2 LCD:
+ *    `[[RDS PS]   ST SS]`
+ *    `[[RDS RT (< scr)]]`
+ * 
+ * Where ST is the stereo indicator, RDS is the RDS indicator and SS is the signal strength indicator.
+ */
 MainScreen::MainScreen(LiquidCrystal_I2C* lcd, FMState *state) : Screen(lcd, state){
   this->screenType = MAIN_SCREEN;
 }
 
+/**
+ * Call this method when there is a substantial change to information on the display. This will tell the screen to redraw the whole
+ * screen. This is to reduce LCD flicker as LCD's are slow to redraw - normally only essential information is drawn.
+ */
 void MainScreen::refreshOnNextDraw() {
   Screen::refreshOnNextDraw();
 
@@ -99,10 +142,10 @@ void MainScreen::init(){
   this->lcd->clear();
   this->lcd->setCursor(1, 0);
 
-  this->lcd->print(((float)this->state->frequency / 100.0f));
+  this->lcd->print(((float)this->state->getFrequency() / 100.0f));
   this->lcd->print(" MHz");
 
-  if(this->state->hasStereo){
+  if(this->state->hasStereo()){
     this->lcd->setCursor(LCD_WIDTH - 4, 0);
     this->lcd->print("ST");
   }
@@ -114,85 +157,104 @@ void MainScreen::init(){
 }
 
 void MainScreen::tick() {
-  if(this->needsUpdate() || this->state->getStateChanged()){
+  bool refreshWholeScreen = this->needsUpdate(); 
+
+  
+  if(refreshWholeScreen || this->state->getStateChanged()){
+    #ifndef CLEAR_SCREEN_INSTEAD_OF_WRITE
+    // clear the screen
     this->lcd->setCursor(LCD_WIDTH - 5, 0);
     this->lcd->print("   ");
     this->lcd->setCursor(LCD_WIDTH - 1, 0);
     this->lcd->print(" ");
+    #else
+    this->lcd->clear();
+    #endif
 
+    // print the frequency. If the LCD is a 2 line, then it prints the frequency IF the rds ps is not available.
     this->lcd->setCursor(1, 0);
 
-    // draw the frequency
     #if LCD_HEIGHT == 2
-      if (!this->state->hasRds){
+      if (!this->state->hasRds()){
     #endif
-      this->lcd->printf("%.2f MHz", ((float)this->state->frequency / 100.0f));
+      this->lcd->printf("%.2f MHz  ", ((float)this->state->getFrequency() / 100.0f));
     #if LCD_HEIGHT == 2
       }
     #endif
     
-    this->lcd->setCursor(0, 1);
-    this->lcd->printf("%*s", LCD_WIDTH);
-
-    if (this->state->hasStereo){
-      #if LCD_WIDTH < 17 && LCD_HEIGHT > 2
-      if(this->state->hasRds) this->lcd->setCursor(LCD_WIDTH - 6, 1);
-      else this->lcd->setCursor(LCD_WIDTH - 4, 0);
-      #else
-      this->lcd->setCursor(LCD_WIDTH - 5, 0);
-      #endif
-      this->lcd->print("ST");
-    }
-
-    this->lcd->setCursor(LCD_WIDTH - 2, 0);
-    this->lcd->write(byte(0));
-    if (this->state->signalStrength > 0) 
-      this->lcd->write(byte(this->state->signalStrength));
+    #ifndef CLEAR_SCREEN_INSTEAD_OF_WRITE
+    // clear the rest of the screen
+    this->clearLine(1);
 
     #if LCD_HEIGHT > 2
-    this->lcd->setCursor(0, 2);
-    this->lcd->printf("%*s", LCD_WIDTH);
+    this->clearLine(2);
       #if LCD_HEIGHT > 3
-    this->lcd->setCursor(0, 3);
-    this->lcd->printf("%*s", LCD_WIDTH);
+    this->clearLine(3);
       #endif
     #endif
+    #endif
 
-    if (this->state->hasRds){
+    // Print the RDS information if it is available; else print 'No RDS'
+    if (this->state->hasRDS()){
       #if LCD_HEIGHT > 2
         this->lcd->setCursor(0, 1);
       #else
         this->lcd->setCursor(0, 0);
       #endif
-      this->lcd->print(this->state->ps);
+      this->lcd->print(this->state->getRdsPS());
 
       #if LCD_HEIGHT > 2
+        // print the RDS indicator
         this->lcd->setCursor(LCD_WIDTH - 3, 1);
         this->lcd->print("RDS");
 
         // draw the PTY only if the display is a 4 liner.
         #if LCD_HEIGHT > 3
-          // draw the PTY text
           this->lcd->setCursor(0, 2);
-          this->lcd->print(this->state->pty != -1 ? pty_values[this->state->pty] : "[No PTY]");
+          this->lcd->print(this->state->getRdsPTY() != -1 ? pty_values[this->state->getRdsPTY()] : "[No PTY]");
         #endif
       #endif
 
+      // print the radio text
       this->lcd->setCursor(0, LCD_HEIGHT - 1);
-      this->lcd->print(this->state->rt.substring(currentWindow-LCD_WIDTH, currentWindow));
+      this->lcd->print(this->state->getRdsRT().substring(currentWindow-LCD_WIDTH, currentWindow));
     }else{
       // display a no rds available message when there is no RDS.
       this->lcd->setCursor(LCD_WIDTH/2 - 3, LCD_HEIGHT > 3 ? 2 : 1);
       this->lcd->print("No RDS");
     }
 
+    #ifdef CLEAR_SCREEN_INSTEAD_OF_WRITE
+    this->state->allStatesChanged();
+    #endif
     this->hasUpdatedScreen();
   }
 
-  if (this->state->hasRds && this->state->rt.length() > LCD_WIDTH){
+  // update and draw the stereo indicator
+  if (refreshWholeScreen ||  this->state->getStereoStateChanged()){
+    #if LCD_WIDTH < 17 && LCD_HEIGHT > 2
+    if(this->state->hasRDS()) this->lcd->setCursor(LCD_WIDTH - 6, 1);
+    else this->lcd->setCursor(LCD_WIDTH - 4, 0);
+    #else
+    this->lcd->setCursor(LCD_WIDTH - 5, 0);
+    #endif
+    this->lcd->print(this->state->hasStereo() ? "ST" : "  ");
+  }
+
+  // update and draw the signal indicator
+  if (refreshWholeScreen || this->state->getSignalStateChanged()){
+    this->lcd->setCursor(LCD_WIDTH - 2, 0);
+    this->lcd->write(byte(0));
+    if (this->state->getSignalStrength() > 0) 
+      this->lcd->write(byte(this->state->getSignalStrength()));
+
+  }
+
+  // scroll the radio text if it is longer than the width of the screen.
+  if (this->state->hasRDS() && this->state->getRdsRT().length() > LCD_WIDTH){
     this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
 
-    if (this->currentWindow == LCD_WIDTH || this->currentWindow >= this->state->rt.length()){
+    if (this->currentWindow == LCD_WIDTH || this->currentWindow >= this->state->getRdsRT().length()){
       this->wait++;
       if (this->wait >= SCROLL_WAITING_TIME){
         if (this->currentWindow == LCD_WIDTH)
@@ -202,7 +264,7 @@ void MainScreen::tick() {
       }
     }else this->currentWindow++;
 
-    this->lcd->print(this->state->rt.substring(currentWindow - LCD_WIDTH, currentWindow));
+    this->lcd->print(this->state->getRdsRT().substring(currentWindow - LCD_WIDTH, currentWindow));
   }
 }
 
@@ -356,7 +418,7 @@ void VolumeScreen::moveDown(){
  * Returns the current volume that is being displayed.
  */
 int VolumeScreen::select(){
-    return this->state->volume;
+    return this->state->getVolume();
 }
 
 /** 
@@ -379,40 +441,40 @@ void VolumeScreen::tick(){
 
     #if LCD_HEIGHT > 2
 
-      if (!this->state->hasRds || this->state->ps.isEmpty() || this->state->ps.equals("[No PS]")){
+      if (!this->state->hasRDS() || this->state->getRdsPS().isEmpty() || this->state->getRdsPS().equals("[No PS]")){
         this->lcd->setCursor(0, 0);
-        this->lcd->printf(" %.2f MHz", ((float)this->state->frequency / 100.0f));
+        this->lcd->printf(" %.2f MHz", ((float)this->state->getFrequency() / 100.0f));
       }else{
-        this->lcd->printf("% 8s    ", this->state->ps);
+        this->lcd->printf("%- 8s    ", this->state->getRdsPS());
       }
 
       // display the Stereo indicator
-      if(this->state->hasStereo){
+      if(this->state->hasStereo()){
         this->lcd->setCursor(LCD_WIDTH - 5, 0);
         this->lcd->print("ST");
       }
 
       this->lcd->setCursor(LCD_WIDTH - 2, 0);
       this->lcd->write(byte(0));
-      if (this->state->signalStrength > 0 && this->state->signalStrength <= 3)
-        this->lcd->write(byte(this->state->signalStrength));
+      if (this->state->getSignalStrength() > 0 && this->state->getSignalStrength() <= 3)
+        this->lcd->write(byte(this->state->getSignalStrength()));
       
       this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
       this->lcd->print("Volume");
       this->lcd->setCursor(LCD_WIDTH/2 - 8, 2);
-      for (int i = 0; i < this->state->volume; i++)
+      for (int i = 0; i < this->state->getVolume(); i++)
         this->lcd->write(byte(5));
-      for (int i = this->state->volume; i < 16; i++)
-        this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
+      for (int i = this->state->getVolume(); i < 16; i++)
+        this->lcd->write(byte(this->state->getVolume() == 15 ? 5 : 4));
 
     #elif LCD_HEIGHT == 2
       this->lcd->setCursor(LCD_WIDTH/2 - 3, 0);
       this->lcd->print("Volume");
       this->lcd->setCursor(LCD_WIDTH/2 - 8, 1);
-      for (int i = 0; i < this->state->volume; i++)
+      for (int i = 0; i < this->state->getVolume(); i++)
         this->lcd->write(byte(5));
-      for (int i = this->state->volume; i < 16; i++)
-        this->lcd->write(byte(this->state->volume == 15 ? 5 : 4));
+      for (int i = this->state->getVolume(); i < 16; i++)
+        this->lcd->write(byte(this->state->getVolume() == 15 ? 5 : 4));
     #endif
 
     this->hasUpdatedScreen();

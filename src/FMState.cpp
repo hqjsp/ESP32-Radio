@@ -21,6 +21,23 @@ bool FMState::getStateChanged(){
     return change;
 }
 
+bool FMState::getSignalStateChanged(){
+    bool change = this->signalChanged;
+    this->signalChanged = false;
+    return change;
+}
+
+bool FMState::getStereoStateChanged(){
+    bool change = this->stereoChanged;
+    this->stereoChanged = false;
+    return change;
+}
+
+void FMState::allStatesChanged(){
+    this->stereoChanged = true;
+    this->signalChanged = true;
+}
+
 /**
  * This resets all RDS parameters to their default values.
  * This should be called anytime the frequency changes (except if the frequency changes due to AF).
@@ -29,8 +46,8 @@ void FMState::reset(){
     this->ps = "[No PS]";
     this->pty = -1;
     this->rt = "[No RadioText]";
-    this->hasRds = false;
-    this->hasStereo = false;
+    this->rds = false;
+    this->stereo = false;
     this->signalStrength = 0;
 }
 /**
@@ -85,8 +102,8 @@ void FMState::decrementFrequency(){
  * @param stereo a bool value representing whether the station is in stereo or not.
  */
 void FMState::setStereo(bool stereo){
-    this->stateChanged = this->hasStereo != stereo;
-    this->hasStereo = stereo;
+    this->stereoChanged = this->stereo != stereo;
+    this->stereo = stereo;
 }
 
 /**
@@ -94,7 +111,7 @@ void FMState::setStereo(bool stereo){
  * @param signalStrength the signal strength between 0-3.
  */
 void FMState::setSignalStrength(int signalStrength){
-    this->stateChanged = this->signalStrength != signalStrength;
+    this->signalChanged = this->signalStrength != signalStrength;
     if (signalStrength >= 0 && signalStrength <= 3)
         this->signalStrength = signalStrength;
     else this->signalStrength = 0;
@@ -105,8 +122,8 @@ void FMState::setSignalStrength(int signalStrength){
  * @param rds a bool value representing whether the station has RDS data or not.
  */
 void FMState::setRDS(bool rds){
-    this->stateChanged = this->hasRds != rds;
-    this->hasRds = rds;
+    if (!this->stateChanged) this->stateChanged = this->rds != rds;
+    this->rds = rds;
 }
 
 /**
@@ -114,10 +131,18 @@ void FMState::setRDS(bool rds){
  * @param rds_ps the program service value
  */
 void FMState::setRdsPS(char * rds_ps){
-    String nps = String(rds_ps).substring(0, 8);
-    this->stateChanged = !this->ps.equals(nps);
-    this->ps = nps;
-    this->hasRds = true;
+    this->setRdsPS(String(rds_ps));
+}
+
+/**
+ * Sets the current station's RDS program service field. This will also set the RDS flag.
+ * @param rds_ps the program service value
+ */
+void FMState::setRdsPS(String rds_ps){
+    rds_ps = String(rds_ps).substring(0, 8);
+    if (!this->stateChanged) this->stateChanged = !this->ps.equals(rds_ps);
+    this->ps = rds_ps;
+    this->rds = true;
 }
 
 /**
@@ -126,9 +151,9 @@ void FMState::setRdsPS(char * rds_ps){
  * @param rds_pty the station's PTY value.
  */
 void FMState::setRdsPTY(int rds_pty){
-    this->stateChanged = this->pty != rds_pty;
+    if (!this->stateChanged) this->stateChanged = this->pty != rds_pty;
     this->pty = rds_pty;
-    this->hasRds = true;
+    this->rds = true;
 }
 
 /**
@@ -136,10 +161,14 @@ void FMState::setRdsPTY(int rds_pty){
  * @param rds_rt the station's radiotext field.
  */
 void FMState::setRdsRT(char * rds_rt) {
-    String nrt = String(rds_rt).substring(0, 128);
-    this->stateChanged = !this->rt.equals(nrt);
-    this->rt = nrt;
-    this->hasRds = true;
+    this->setRdsRT(String(rds_rt));
+}
+
+void FMState::setRdsRT(String rds_rt){
+    rds_rt = String(rds_rt).substring(0, 128);
+    if (!this->stateChanged) this->stateChanged = !this->rt.equals(rds_rt);
+    this->rt = rds_rt;
+    this->rds = true;
 }
 
 void FMState::setVolume(int vol){
@@ -159,6 +188,31 @@ void FMState::decrementVolume(){
     this->volume--;
     if (this->volume < 0)
         this->volume = 0;
+}
+
+int8_t FMState::getVolume(){
+    return this->volume;
+}
+uint16_t FMState::getFrequency(){
+    return this->frequency;
+}
+uint8_t FMState::getSignalStrength(){
+    return this->signalStrength;
+}
+bool FMState::hasStereo(){
+    return this->stereo;
+}
+bool FMState::hasRDS(){
+    return this->rds;
+}
+String FMState::getRdsPS(){
+    return this->ps;
+}
+String FMState::getRdsRT(){
+    return this->rt;
+}
+int FMState::getRdsPTY(){
+    return this->pty;
 }
 
 

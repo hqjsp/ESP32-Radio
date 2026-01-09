@@ -21,27 +21,36 @@
 struct FMState {
     private:
         bool stateChanged = false;
-    public:
+        bool stereoChanged = false;
+        bool signalChanged = false;
+
         int8_t volume;
         uint16_t frequency;
         uint8_t signalStrength;
 
-        bool hasStereo = false;
-        bool hasRds = false;
+        bool stereo = false;
+        bool rds = false;
 
         String ps;
         String rt;
         int pty;
-
+    public:
+        
         FMState(uint16_t, uint8_t);
 
         bool getStateChanged();
+        bool getSignalStateChanged();
+        bool getStereoStateChanged();
+
+        void allStatesChanged();
 
         void reset();
 
         void setRDS(bool);
         void setRdsPS(char*);
         void setRdsRT(char*);
+        void setRdsPS(String);
+        void setRdsRT(String);
         void setRdsPTY(int pty);
         
         void setStereo(bool);
@@ -56,6 +65,15 @@ struct FMState {
         void setVolume(int);
         void incrementVolume();
         void decrementVolume();
+
+        int8_t getVolume();
+        uint16_t getFrequency();
+        uint8_t getSignalStrength();
+        bool hasStereo();
+        bool hasRDS();
+        String getRdsPS();
+        String getRdsRT();
+        int getRdsPTY();
 };
 
 class FMStationItem {
