@@ -448,16 +448,18 @@ void VolumeScreen::tick(){
         this->lcd->printf("%- 8s    ", this->state->getRdsPS());
       }
 
+      this->lcd->setCursor(LCD_WIDTH - 5, 0);
       // display the Stereo indicator
       if(this->state->hasStereo()){
-        this->lcd->setCursor(LCD_WIDTH - 5, 0);
         this->lcd->print("ST");
-      }
+      }else
+        this->lcd->print("  ");
 
       this->lcd->setCursor(LCD_WIDTH - 2, 0);
       this->lcd->write(byte(0));
       if (this->state->getSignalStrength() > 0 && this->state->getSignalStrength() <= 3)
         this->lcd->write(byte(this->state->getSignalStrength()));
+      else this->lcd->print(" ");
       
       this->lcd->setCursor(LCD_WIDTH/2 - 3, 1);
       this->lcd->print("Volume");

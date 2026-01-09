@@ -79,6 +79,15 @@ namespace ESPRadio {
     volatile unsigned long lastPressedTime = 0;
     volatile bool buttonPressed = false;
 
+    /**
+     * Loads a new screen based on the screen id. These are found in FMLCD.h.
+     * The default values are:
+     *  - Main Screen = 0x13
+     *  - Station List Screen = 0x14
+     *  - Volume Screen = 0x15.
+     * These can be any arbitary value - but must be defined in FMLCD.h.
+     * @param screenid the screen id to load.
+     */
     void setScreen(int screenid){
       Screen *newScr = nullptr;
           switch(screenid){
@@ -98,13 +107,10 @@ namespace ESPRadio {
               screen->init();
           }
     }
-    void pollButton(uint8_t pin, int level, void(*callback)()){
-      if (digitalRead(pin) == level){
-        callback();
-        ESPRadio::buttonPressed = true;
-      }
-    }
 
+    /**
+     * Debounce wrapper for a button press. Returns true if the button press should be registered, else returns false.
+     */
     bool debounce(){
       unsigned long now = millis();
 
@@ -115,59 +121,64 @@ namespace ESPRadio {
 
       return false;
     }
+
+    /**
+     * Checks to see if the specified pin is reading at the specified level, and calls the `callback()` function if this is true.
+     * @param pin the GPIO pin to check.
+     * @param level the level the GPIO pin should read to call the function
+     * @param callback the function to call when the GPIO pin is active.
+     */
+    void pollButton(uint8_t pin, int level, void(*callback)()){
+      if (digitalRead(pin) == level){
+        
+        if (ESPRadio::debounce()){
+          callback();
+        }
+        ESPRadio::buttonPressed = true;
+      }
+    }
 };
 
 void menu_up(){
-  if (ESPRadio::debounce()){
-    if (screen->getType() != LIST_SCREEN){
-      state->incrementFrequency();
-    }else screen->moveUp();
-  }
+  if (screen->getType() != LIST_SCREEN){
+    state->incrementFrequency();
+  }else screen->moveUp();
 }
 
 void menu_down(){
-  if (ESPRadio::debounce()){
-    if (screen->getType() != LIST_SCREEN){
-      state->decrementFrequency();
-    }else screen->moveDown();
-  }
+  if (screen->getType() != LIST_SCREEN){
+    state->decrementFrequency();
+  }else screen->moveDown();
 }
 
 void menu_select(){
-  if (ESPRadio::debounce()){
-    if (screen->getType() != LIST_SCREEN){  // load the station list screen
-      ESPRadio::setScreen(LIST_SCREEN);
-      ticker = 0;
-    }else if (screen->getType() == LIST_SCREEN){  // get the selected element from the list screen and tune
-      FMStationItem *selected = list->get(screen->select());
-      state->reset();
-      state->setFrequency(selected->getFrequency());
-      state->setRDS(selected->hasRds());
-      state->setRdsPS(selected->getRdsPS());
-      ESPRadio::setScreen(MAIN_SCREEN);
-
-        // SI4703 tune
-    }
-    screen->refreshOnNextDraw();
+  if (screen->getType() != LIST_SCREEN){  // load the station list screen
+    ESPRadio::setScreen(LIST_SCREEN);
+        ticker = 0;
+  }else if (screen->getType() == LIST_SCREEN){  // get the selected element from the list screen and tune
+    FMStationItem *selected = list->get(screen->select());
+    state->reset();
+    state->setFrequency(selected->getFrequency());
+    state->setRDS(selected->hasRds());
+    state->setRdsPS(selected->getRdsPS());
+    ESPRadio::setScreen(MAIN_SCREEN);
+    // SI4703 tune
   }
+  screen->refreshOnNextDraw();
 }
 
 void vol_up(){
-  if (ESPRadio::debounce()){
-    if (screen->getType() != VOL_SCREEN) 
-      ESPRadio::setScreen(VOL_SCREEN);
-    screen->moveUp();
-    ticker = 0;
-  }
+  if (screen->getType() != VOL_SCREEN) 
+    ESPRadio::setScreen(VOL_SCREEN);
+  screen->moveUp();
+  ticker = 0;
 }
 
 void vol_down(){
-  if (ESPRadio::debounce()){
-    if (screen->getType() != VOL_SCREEN) 
-      ESPRadio::setScreen(VOL_SCREEN);
-    screen->moveDown();
-    ticker = 0;
-  }
+  if (screen->getType() != VOL_SCREEN) 
+    ESPRadio::setScreen(VOL_SCREEN);
+  screen->moveDown();
+  ticker = 0;
 }
 
 void setup() {
