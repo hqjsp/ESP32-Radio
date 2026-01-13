@@ -206,7 +206,9 @@ void MainScreen::tick() {
       #if LCD_HEIGHT > 2
         // print the RDS indicator
         this->lcd->setCursor(LCD_WIDTH - 3, 1);
-        this->lcd->print("RDS");
+        if (state->getRDSIndicator())
+          this->lcd->print("RDS");
+        else this->lcd->print("   ");
 
         // draw the PTY only if the display is a 4 liner.
         #if LCD_HEIGHT > 3
@@ -217,6 +219,8 @@ void MainScreen::tick() {
 
       // print the radio text
       this->lcd->setCursor(0, LCD_HEIGHT - 1);
+      if (this->state->getRdsRT().length() < LCD_WIDTH)
+        currentWindow = LCD_WIDTH;
       this->lcd->print(this->state->getRdsRT().substring(currentWindow-LCD_WIDTH, currentWindow));
     }else{
       // display a no rds available message when there is no RDS.

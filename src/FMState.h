@@ -31,6 +31,8 @@ struct FMState {
         bool stereo = false;
         bool rds = false;
 
+        bool rds_indicator = false;
+
         String ps;
         String rt;
         int pty;
@@ -47,6 +49,7 @@ struct FMState {
         void reset();
 
         void setRDS(bool);
+        void setRDSIndicator(bool);
         void setRdsPS(char*);
         void setRdsRT(char*);
         void setRdsPS(String);
@@ -74,6 +77,8 @@ struct FMState {
         String getRdsPS();
         String getRdsRT();
         int getRdsPTY();
+
+        bool getRDSIndicator();
 };
 
 class FMStationItem {
@@ -89,6 +94,8 @@ class FMStationItem {
         String getRdsPS();
         uint16_t getFrequency();
         bool hasRds();
+
+        void setRdsPS(const char* ps);
 
         bool operator==(const FMStationItem& r);
 };
@@ -109,6 +116,7 @@ struct FMStationList {
 
         FMStationItem **getAll();
         FMStationItem *get(int);
+        FMStationItem *get(FMStationItem freq);
 
         FMStationItem *operator[](int);
         void operator+(FMStationItem*);

@@ -3,7 +3,7 @@
 
 Application::Application(){
   // setup devices
-  this->rx.setup(RST_PIN, SDIO_PIN);
+  //this->rx.setup(RST_PIN, 1, 1);
 
   this->currentFrequency = 9990;
 }

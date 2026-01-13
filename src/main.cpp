@@ -25,6 +25,7 @@
 
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
+#include "SI470X.h"
 
 #include "FMLCD.h"
 
@@ -42,17 +43,17 @@
 
 /* SI4703 Control pins */
 
-#define SI4703_RST_PIN    4
-#define SI4703_RDS_PIN    2
-#define SI4703_SEEK_PIN  15
+#define SI4703_RST_PIN   15
+#define SI4703_SDA_PIN   19
+#define SI4703_SCL_PIN   18
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY       100
+#define UPDATE_DELAY       80
 #define TMP_SCR_SHOWTIME   35
 #define DEBOUNCE_DELAY  150
 
-
+SI470X si470x;
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
 
 FMState *state = new FMState(FM_DEFAULT_FREQ, 6);
@@ -142,12 +143,18 @@ namespace ESPRadio {
 void menu_up(){
   if (screen->getType() != LIST_SCREEN){
     state->incrementFrequency();
+
+    si470x.clearRdsBuffer();
+    si470x.setFrequency(state->getFrequency());
   }else screen->moveUp();
 }
 
 void menu_down(){
   if (screen->getType() != LIST_SCREEN){
     state->decrementFrequency();
+
+    si470x.clearRdsBuffer();
+    si470x.setFrequency(state->getFrequency());
   }else screen->moveDown();
 }
 
@@ -159,9 +166,15 @@ void menu_select(){
     FMStationItem *selected = list->get(screen->select());
     state->reset();
     state->setFrequency(selected->getFrequency());
-    state->setRDS(selected->hasRds());
-    state->setRdsPS(selected->getRdsPS());
+    if (selected->hasRds()){
+      state->setRDS(selected->hasRds());
+      state->setRdsPS(selected->getRdsPS());
+    }
+    
     ESPRadio::setScreen(MAIN_SCREEN);
+
+    si470x.clearRdsBuffer();
+    si470x.setFrequency(state->getFrequency());
     // SI4703 tune
   }
   screen->refreshOnNextDraw();
@@ -171,6 +184,8 @@ void vol_up(){
   if (screen->getType() != VOL_SCREEN) 
     ESPRadio::setScreen(VOL_SCREEN);
   screen->moveUp();
+
+  si470x.setVolume(state->getVolume());
   ticker = 0;
 }
 
@@ -178,51 +193,87 @@ void vol_down(){
   if (screen->getType() != VOL_SCREEN) 
     ESPRadio::setScreen(VOL_SCREEN);
   screen->moveDown();
+
+  si470x.setVolume(state->getVolume());
   ticker = 0;
+}
+
+void seekingFunction(){
+  state->setFrequency(si470x.getFrequency());
+}
+
+void findChannels(){
+  si470x.setFrequency(8750);
+  si470x.setMute(true);
+  list->removeAll();
+  while(si470x.getRealFrequency() < 10790){
+    si470x.seek(1, 1);
+    lcd.setCursor(LCD_WIDTH / 2 - 5, 1);
+    /*if (si470x.getRdsReady()){
+      char* ps = si470x.getRdsStationName();
+      if (ps != NULL){
+        list->add(new FMStationItem(si470x.getRealFrequency()));
+        lcd.printf("%d channels", list->size());
+        continue;
+      }
+    }*/
+    
+    list->add(new FMStationItem(si470x.getRealFrequency()));
+    lcd.printf("%d channels", list->size());
+
+    #if LCD_HEIGHT > 2
+    lcd.setCursor(LCD_WIDTH / 2 - 5, 2);
+    lcd.printf("%.2f MHz", ((float)si470x.getRealFrequency() / 100.0f));
+    #endif
+  }
+  si470x.setMute(false);
+  if (list->size() > 0)
+    si470x.setFrequency(list->get(0)->getFrequency());
+  else si470x.setFrequency(8750);
+
+  state->setFrequency(si470x.getRealFrequency());
 }
 
 void setup() {
   Serial.begin(115200);
+  Serial.write("Starting up");
   // initiate button pins. These should be connected between the pin and ground.
-  pinMode(MENU_UP_PIN, INPUT_PULLUP);
+  /*pinMode(MENU_UP_PIN, INPUT_PULLUP);
   pinMode(MENU_DOWN_PIN, INPUT_PULLUP);
   pinMode(MENU_PIN, INPUT_PULLUP);
   pinMode(VOLUME_UP_PIN, INPUT_PULLUP);
-  pinMode(VOLUME_DN_PIN, INPUT_PULLUP);
+  pinMode(VOLUME_DN_PIN, INPUT_PULLUP);*/
+
+  si470x.setup(SI4703_RST_PIN, SI4703_SDA_PIN, SI4703_SCL_PIN, OSCILLATOR_TYPE_CRYSTAL);
 
   lcd.init();
   lcd.backlight();
-  lcd.clear();
   lcd.createChar(0, signal_char);
   lcd.createChar(1, signal_0);
   lcd.createChar(2, signal_1);
   lcd.createChar(3, signal_2);
   lcd.createChar(4, meter_empty);
   lcd.createChar(5, meter_full);
+  lcd.clear();
 
-  lcd.setCursor(LCD_WIDTH / 2 - 6, 1);
+  lcd.setCursor(LCD_WIDTH / 2 - 6, 0);
   lcd.print("ESP-32 Radio");
 
+  si470x.setRDS(true);
+  si470x.setRdsMode(1);
+  si470x.setMono(false);
+  si470x.setAgc(true);
+  si470x.setBlendLevelAdjustment(2);
+  si470x.setBand(0);
+  si470x.setSeekThreshold(16);
 
-  /** @todo Remove all debug code here */
-  state->setRDS(true);
-  state->setStereo(true);
-  state->setRdsPS("Test");
-  state->setRdsRT("This is test radiotext for the ESP radio");
-  state->setSignalStrength(2);
+  si470x.setFrequency(state->getFrequency());
+  si470x.setVolume(state->getVolume());
 
-  screen->refreshOnNextDraw();
+  lcd.setCursor(LCD_WIDTH / 2 - 5, 1);
+  lcd.println("0 channels");
+  findChannels();
 
-  // add test stations
-  list->add(new FMStationItem(8860, "TEST FM"));
-  list->add(new FMStationItem(8900, "NATIONAL"));
-  list->add(new FMStationItem(8940, "Electro"));
-  list->add(new FMStationItem(9000, "90 RADIO"));
-  list->add(new FMStationItem(9990, "CLASSIC"));
-  list->add(new FMStationItem(10450, " BEATS "));
-  /** end of debug */
-
-  delay(2000);
   // load the main screen
   screen->init();
 }
@@ -230,63 +281,75 @@ void setup() {
 void loop() {
   delay(UPDATE_DELAY);
   ESPRadio::buttonPressed = false;
-
+  
   // check buttons
-  ESPRadio::pollButton(MENU_UP_PIN, LOW, menu_up);
+  /*ESPRadio::pollButton(MENU_UP_PIN, LOW, menu_up);
   ESPRadio::pollButton(MENU_DOWN_PIN, LOW, menu_down);
   ESPRadio::pollButton(MENU_PIN, LOW, menu_select);
   ESPRadio::pollButton(VOLUME_UP_PIN, LOW, vol_up);
-  ESPRadio::pollButton(VOLUME_DN_PIN, LOW, vol_down);
+  ESPRadio::pollButton(VOLUME_DN_PIN, LOW, vol_down);*/
 
-  // check for RDS data from SI4703 chip
-  if (ticker %26 == 0){
-    switch(state->getFrequency()){
-      case 10450:
-        state->setRdsPTY(15);
-        state->setRdsPS(" BEATS ");
-        state->setStereo(true);
-        state->setRdsRT("BEATS RADIO 104.5 - The Hottest Beats are on Beats Radio");
-        state->setSignalStrength(2);
-        break;
-      case 9990:
-        state->setRdsPTY(14);
-        state->setRdsPS("CLASSIC");
-        state->setRdsRT("Home of Mozart - 99.9 Classic FM");
-        state->setSignalStrength(1);
-        break;
-      case 9000:
-        state->setRdsPTY(12);
-        state->setRdsPS("90 RADIO");
-        state->setStereo(true);
-        state->setRdsRT("Your Home of 90's");
-        state->setSignalStrength(3);
-        break;
-      case 8940:
-        state->setRdsPTY(15);
-        state->setRdsPS("Electro");
-        state->setStereo(true);
-        state->setRdsRT("Love Electronic Music");
-        state->setSignalStrength(3);
-        break;
-      case 8900:
-        state->setRdsPTY(2);
-        state->setRdsPS("NATIONAL");
-        state->setSignalStrength(1);
-        break;
-      case 8860:
-        state->setRdsPTY(0);
-        state->setRdsPS("TEST FM");
-        state->setStereo(true);
-        state->setRdsRT("This is test radiotext for the ESP radio");
-        state->setSignalStrength(2);
-        break;
+  if (Serial.available() > 0){
+    int command = Serial.read();
+
+    if (command == 65){
+      menu_up();
+    }else if (command == 66){
+      menu_down();
+    }else if (command == 61){
+      vol_up();
+    }else if (command == 45){
+      vol_down();
+    }else if (command == 10){
+      menu_select();
     }
   }
 
+  // get info from SI4703 chip
+  int signalStrength = si470x.getRssi();
+  state->setRDSIndicator(si470x.getRdsSync());
+  state->setStereo(si470x.isStereo());
+
+  if (signalStrength < 9){
+    state->setSignalStrength(0);
+  }else if (signalStrength < 20){
+    state->setSignalStrength(1);
+  }else if (signalStrength < 32){
+    state->setSignalStrength(2);
+  }else {
+    state->setSignalStrength(3);
+  }
+
+  // check for RDS data.
+  if (si470x.getRdsReady()){
+    char* ps = si470x.getRdsStationName();
+    if (ps != NULL)
+      state->setRdsPS(ps);
+    
+    char* rt;
+
+    if (si470x.getRdsFlagAB() == 0){
+      rt = si470x.getRdsText2A();
+    }else rt = si470x.getRdsText2B();
+    if (rt != NULL){
+      state->setRdsRT(rt);
+    }
+    
+    state->setRdsPTY(si470x.getRdsProgramType());
+  }
+  
 
   // check if the screen needs updating, and update it.
-  if (ticker%3 == 0 || ESPRadio::buttonPressed) 
+  if (ticker%4 == 0 || ESPRadio::buttonPressed) {
     screen->tick();
+
+    // update the item in the station list if there was RDS received.
+    if (state->hasRDS()){
+      FMStationItem *fmitem = list->get(FMStationItem(state->getFrequency()));
+      if (fmitem != nullptr)
+        fmitem->setRdsPS(state->getRdsPS().c_str());
+    }
+  }
 
   // change the screen back to the main screen if it is on another screen (except the list screen) and
   // this has been active for x amount of time.

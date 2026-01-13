@@ -126,6 +126,10 @@ void FMState::setRDS(bool rds){
     this->rds = rds;
 }
 
+void FMState::setRDSIndicator(bool rds){
+    this->rds_indicator = true;
+}
+
 /**
  * Sets the current station's RDS program service field. This will also set the RDS flag.
  * @param rds_ps the program service value
@@ -165,7 +169,9 @@ void FMState::setRdsRT(char * rds_rt) {
 }
 
 void FMState::setRdsRT(String rds_rt){
-    rds_rt = String(rds_rt).substring(0, 128);
+    int null_index = rds_rt.indexOf(13);
+    rds_rt = String(rds_rt).substring(0, null_index != -1 ? null_index : 64);
+    rds_rt.trim();
     if (!this->stateChanged) this->stateChanged = !this->rt.equals(rds_rt);
     this->rt = rds_rt;
     this->rds = true;
@@ -214,7 +220,9 @@ String FMState::getRdsRT(){
 int FMState::getRdsPTY(){
     return this->pty;
 }
-
+bool FMState::getRDSIndicator(){
+    return this->rds_indicator;
+}
 
 /**
  * Creates a new station item. This constructor should only be used on stations that do not contain
@@ -256,6 +264,12 @@ bool FMStationItem::hasRds(){
     return this->rds;
 }
 
+void FMStationItem::setRdsPS(const char* ps){
+    memcpy(this->ps, ps, 9);
+    this->ps[8] = '\0';
+    this->rds = true;
+}
+
 bool FMStationItem::operator==(const FMStationItem& r){
     if (this->rds){
         if (strncmp(this->ps, r.ps, 8) == 0)
@@ -278,6 +292,10 @@ int FMStationList::size(){
  * @param item a new FMStationItem object to append to the list.
  */
 void FMStationList::add(FMStationItem* item){
+    for (int i = 0; i < this->items.size(); i++){
+        if (this->items[i]->getFrequency() == item->getFrequency())
+            return;
+    }
     this->items.push_back(item);
 }
 /**
@@ -288,6 +306,7 @@ void FMStationList::remove(int index){
     if (this->size() > index || index < 0)
         return;
     
+        delete this->items[index];
     this->items.erase(std::find(this->items.begin(), this->items.end(), this->items[index]));
 }
 /**
@@ -295,6 +314,7 @@ void FMStationList::remove(int index){
  * @param item the pointer to the element that needs to be removed.
  */
 void FMStationList::remove(FMStationItem *item){
+    delete item;
     this->items.erase(std::find(this->items.begin(), this->items.end(), item));
 }
 /**
@@ -315,6 +335,13 @@ FMStationItem *FMStationList::get(int index){
         return nullptr;
     return this->items[index];
 }
+FMStationItem *FMStationList::get(FMStationItem freq){
+    for (int i = 0; i < this->items.size(); i++){
+        if (this->items[i]->getFrequency() == freq.getFrequency())
+            return this->items[i];
+    }
+    return nullptr;
+}
 FMStationItem *FMStationList::operator[](int index){
     return this->get(index);
 }
@@ -323,4 +350,10 @@ void FMStationList::operator+(FMStationItem *item){
 }
 bool FMStationList::operator==(const FMStationList& r){
     return this->items == r.items;
+}
+void FMStationList::removeAll(){
+    for (int i = 0; i < this->items.size(); i++){
+        delete this->items[i];
+    }
+    this->items.clear();
 }
