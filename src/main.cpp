@@ -49,7 +49,7 @@
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY       80
+#define UPDATE_DELAY       50
 #define TMP_SCR_SHOWTIME   35
 #define DEBOUNCE_DELAY  150
 
@@ -175,7 +175,6 @@ void menu_select(){
 
     si470x.clearRdsBuffer();
     si470x.setFrequency(state->getFrequency());
-    // SI4703 tune
   }
   screen->refreshOnNextDraw();
 }
@@ -244,7 +243,7 @@ void setup() {
   pinMode(VOLUME_UP_PIN, INPUT_PULLUP);
   pinMode(VOLUME_DN_PIN, INPUT_PULLUP);*/
 
-  si470x.setup(SI4703_RST_PIN, SI4703_SDA_PIN, SI4703_SCL_PIN, OSCILLATOR_TYPE_CRYSTAL);
+  si470x.setup(SI4703_RST_PIN, SI4703_SDA_PIN, SI4703_SCL_PIN, OSCILLATOR_TYPE_REFCLK);
 
   lcd.init();
   lcd.backlight();
@@ -260,7 +259,7 @@ void setup() {
   lcd.print("ESP-32 Radio");
 
   si470x.setRDS(true);
-  si470x.setRdsMode(1);
+  si470x.setRdsMode(0);
   si470x.setMono(false);
   si470x.setAgc(true);
   si470x.setBlendLevelAdjustment(2);
@@ -307,40 +306,50 @@ void loop() {
 
   // get info from SI4703 chip
   int signalStrength = si470x.getRssi();
-  state->setRDSIndicator(si470x.getRdsSync());
   state->setStereo(si470x.isStereo());
 
-  if (signalStrength < 9){
+  if (signalStrength < 10){
     state->setSignalStrength(0);
   }else if (signalStrength < 20){
     state->setSignalStrength(1);
-  }else if (signalStrength < 32){
+  }else if (signalStrength < 26){
     state->setSignalStrength(2);
   }else {
     state->setSignalStrength(3);
   }
 
-  // check for RDS data.
   if (si470x.getRdsReady()){
-    char* ps = si470x.getRdsStationName();
-    if (ps != NULL)
-      state->setRdsPS(ps);
-    
-    char* rt;
-
-    if (si470x.getRdsFlagAB() == 0){
+    char *ps, *rt;
+    for(int i = 0; i < 4; i++){
+      ps = si470x.getRdsStationName();
       rt = si470x.getRdsText2A();
-    }else rt = si470x.getRdsText2B();
-    if (rt != NULL){
-      state->setRdsRT(rt);
     }
     
-    state->setRdsPTY(si470x.getRdsProgramType());
+    /*if (si470x.getRdsFlagAB() == 0){
+      rt = si470x.getRdsText2A();
+    }else rt = si470x.getRdsText2B();*/
+    // check for RDS data.
+    if (si470x.getRDSErrors() < 2){
+      if (ps != NULL)
+        state->setRdsPS(ps);
+      
+      /*if (si470x.getRdsFlagAB() == 0){
+        rt = si470x.getRdsText2A();
+      }else rt = si470x.getRdsText2B();
+      */if (rt != NULL){
+        state->setRdsRT(rt);
+      }
+
+      
+      state->setRdsPTY(si470x.getRdsProgramType());
+      state->setRdsPI(si470x.getRdsPI());
+      state->setRdsTP(si470x.getRdsTP());
+    }
   }
   
 
   // check if the screen needs updating, and update it.
-  if (ticker%4 == 0 || ESPRadio::buttonPressed) {
+  if (ticker%8 == 0 || ESPRadio::buttonPressed) {
     screen->tick();
 
     // update the item in the station list if there was RDS received.

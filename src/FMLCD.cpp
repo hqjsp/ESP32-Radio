@@ -175,7 +175,7 @@ void MainScreen::tick() {
     this->lcd->setCursor(1, 0);
 
     #if LCD_HEIGHT == 2
-      if (!this->state->hasRds()){
+      if (!this->state->hasRDS()){
     #endif
       this->lcd->printf("%.2f MHz  ", ((float)this->state->getFrequency() / 100.0f));
     #if LCD_HEIGHT == 2
@@ -205,15 +205,18 @@ void MainScreen::tick() {
 
       #if LCD_HEIGHT > 2
         // print the RDS indicator
-        this->lcd->setCursor(LCD_WIDTH - 3, 1);
-        if (state->getRDSIndicator())
-          this->lcd->print("RDS");
-        else this->lcd->print("   ");
+        this->lcd->setCursor(LCD_WIDTH - 4, 1);
+        this->lcd->printf("%04X", this->state->getRdsPI());
 
         // draw the PTY only if the display is a 4 liner.
         #if LCD_HEIGHT > 3
           this->lcd->setCursor(0, 2);
           this->lcd->print(this->state->getRdsPTY() != -1 ? pty_values[this->state->getRdsPTY()] : "[No PTY]");
+
+          if (this->state->getRdsTP()){
+            this->lcd->setCursor(LCD_WIDTH-2, 2);
+            this->lcd->print("TP");
+          }
         #endif
       #endif
 
@@ -257,6 +260,10 @@ void MainScreen::tick() {
   // scroll the radio text if it is longer than the width of the screen.
   if (this->state->hasRDS() && this->state->getRdsRT().length() > LCD_WIDTH){
     this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
+
+    if (this->currentWindow > this->state->getRdsRT().length()){
+      this->currentWindow = this->state->getRdsRT().length() < LCD_WIDTH ? LCD_WIDTH : this->state->getRdsRT().length();
+    }
 
     if (this->currentWindow == LCD_WIDTH || this->currentWindow >= this->state->getRdsRT().length()){
       this->wait++;

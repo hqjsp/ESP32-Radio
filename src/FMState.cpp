@@ -43,9 +43,11 @@ void FMState::allStatesChanged(){
  * This should be called anytime the frequency changes (except if the frequency changes due to AF).
  */
 void FMState::reset(){
-    this->ps = "[No PS]";
+    this->ps = "[No Name]";
     this->pty = -1;
     this->rt = "[No RadioText]";
+    this->pi = 0x0;
+    this->tp = false;
     this->rds = false;
     this->stereo = false;
     this->signalStrength = 0;
@@ -126,10 +128,6 @@ void FMState::setRDS(bool rds){
     this->rds = rds;
 }
 
-void FMState::setRDSIndicator(bool rds){
-    this->rds_indicator = true;
-}
-
 /**
  * Sets the current station's RDS program service field. This will also set the RDS flag.
  * @param rds_ps the program service value
@@ -158,6 +156,22 @@ void FMState::setRdsPTY(int rds_pty){
     if (!this->stateChanged) this->stateChanged = this->pty != rds_pty;
     this->pty = rds_pty;
     this->rds = true;
+}
+
+void FMState::setRdsPI(uint16_t rds_pi){
+    if (!this->stateChanged) this->stateChanged = (this->pi != rds_pi);
+    this->pi = rds_pi;
+    this->rds = true;
+}
+
+void FMState::setRdsTP(bool tp){
+    if (!this->stateChanged) this->stateChanged = (this->tp != tp);
+    this->tp = tp;
+    this->rds = true;
+}
+
+uint16_t FMState::getRdsPI(){
+    return this->pi;
 }
 
 /**
@@ -220,8 +234,8 @@ String FMState::getRdsRT(){
 int FMState::getRdsPTY(){
     return this->pty;
 }
-bool FMState::getRDSIndicator(){
-    return this->rds_indicator;
+bool FMState::getRdsTP(){
+    return this->tp;
 }
 
 /**

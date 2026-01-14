@@ -586,7 +586,6 @@ public:
     uint8_t getDeviceId();
     uint8_t getChipVersion();
 
-    void setBlendLevelAdjustment(int val);
 
     void setMute(bool value);
     /**
@@ -672,4 +671,12 @@ public:
         this->convertToChar(this->currentFrequency, this->strFrequency, 5, 3, decimalSeparator, true);
         return this->strFrequency;
     };
+
+
+    /* Custom SI4703 functions for the ESP radio project. */
+
+    uint16_t getRdsPI(void);
+    bool getRdsTP(void);
+    void setBlendLevelAdjustment(int val);
+    int getRDSErrors(void);
 };

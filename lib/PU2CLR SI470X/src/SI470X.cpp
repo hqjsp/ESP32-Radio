@@ -749,11 +749,6 @@ void SI470X::setRdsMode(uint8_t rds_mode)
     setAllRegisters();
 }
 
-void SI470X::setBlendLevelAdjustment(int value){
-    reg04->refined.BLNDADJ = value;
-    setAllRegisters();
-}
-
 /**
  * @ingroup GA04
  * @brief Sets the RDS operation 
@@ -1276,4 +1271,75 @@ void SI470X::convertToChar(uint16_t value, char *strValue, uint8_t len, uint8_t 
                 strValue[1] = ' ';
         }
     }
+}
+
+
+/********************************************************************************
+ *                                                                              *
+ *      BELOW ARE EXTRA FUNCTIONS TO THIS LIBRARY USED BY THE ESP32 RADIO       *
+ *    These are custom - not part of the SI470X library. All has been tested    *
+ *   on a SI4703 - other chips in this family may or may not work with these    *
+ *                                                                              *
+ ********************************************************************************/
+
+
+/**
+ * Stereo/Mono Blend Level Adjustment. Sets the RSSI range for stereo/mono blend.
+ * | BLNDADJ value | Description |
+ * | ------------  | ----------- |
+ * |      0        | 31–49 RSSI dBμV (default) |
+ * |      1        | 37–55 RSSI dBμV (+6 dB) |
+ * |      2        | 19–37 RSSI dBμV (–12 dB) |
+ * |      3        | 25–43 RSSI dBμV (–6 dB) |
+ * 
+ * @param value an integer between 0-3 that represent the RSSI range for stereo/mono.
+ */
+void SI470X::setBlendLevelAdjustment(int value){
+    reg04->refined.BLNDADJ = value;
+    setAllRegisters();
+}
+
+/**
+ * Returns the RDS Program Identification code. This is a 16 bit unsigned integer that represents the
+ * station's unique ID. The first, third and forth nibble are unique to the station, while the second
+ * nibble can differ showing that the station is linked with another but might have a regional variety.
+ * @return a 16 bit number.
+ */
+uint16_t SI470X::getRdsPI(void) {
+    getRdsStatus();
+
+    si470x_reg0c blka;
+    blka = shadowRegisters[0x0C];
+
+    return *(uint16_t*)&blka;
+}
+
+/**
+ * Returns the RDS Traffic Program flag.
+ * @return boolean whether or not the station has the traffic program flag set.
+ */
+bool SI470X::getRdsTP(void){
+    si470x_rds_blockb blkb;
+
+    getRdsStatus();
+    blkb.blockB = shadowRegisters[0x0D];
+
+    return blkb.refined.trafficProgramCode;
+}
+
+
+/**
+ * Returns the RDS Block A Errors
+ * | RDS Block A Errors | Description |
+ * | ------------------ | ----------- |
+ * |          0         | 0 errors requiring correction |
+ * |          1         | 1–2 errors requiring correction |
+ * |          2         | 3–5 errors requiring correction |
+ * |          3         | 6+ errors or error in checkword, correction not possible |
+ *
+ */
+int SI470X::getRDSErrors()
+{
+    getStatus();
+    return reg0a->refined.BLERA;
 }

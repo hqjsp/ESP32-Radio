@@ -31,11 +31,11 @@ struct FMState {
         bool stereo = false;
         bool rds = false;
 
-        bool rds_indicator = false;
-
         String ps;
         String rt;
         int pty;
+        uint16_t pi;
+        bool tp = false;
     public:
         
         FMState(uint16_t, uint8_t);
@@ -49,12 +49,15 @@ struct FMState {
         void reset();
 
         void setRDS(bool);
-        void setRDSIndicator(bool);
         void setRdsPS(char*);
         void setRdsRT(char*);
         void setRdsPS(String);
         void setRdsRT(String);
         void setRdsPTY(int pty);
+        void setRdsPI(uint16_t pi);
+        void setRdsTP(bool tp);
+        uint16_t getRdsPI();
+        bool getRdsTP();
         
         void setStereo(bool);
         
@@ -77,8 +80,6 @@ struct FMState {
         String getRdsPS();
         String getRdsRT();
         int getRdsPTY();
-
-        bool getRDSIndicator();
 };
 
 class FMStationItem {
