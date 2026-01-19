@@ -18,9 +18,47 @@
 #define FM_DEFAULT_FREQ  9990
 #define FM_BAND_URANGE  10800
 
+class FMRds {
+    private:
+        unsigned short pi;
+        char ps[9];
+        char rt[65];
+
+        unsigned char pty;
+
+        bool tp = false;
+        bool ta = false;
+
+        bool update = false;
+
+        void trim_rt(void);
+    public:
+        FMRds(void);
+
+        char *get_ps(void);
+        char *get_rt(void);
+        unsigned char get_pty(void);
+        unsigned short get_pi(void);
+        bool get_tp(void);
+        bool get_ta(void);
+
+        bool has_rds(void);
+        bool has_ps(void);
+        bool needs_update(void);
+
+        void has_updated(void);
+        void reset(void);
+
+        void set_ps(char *ps);
+        void set_rt(char *rt);
+        void set_pty(unsigned char pty);
+        void set_pi(unsigned short pi);
+        void set_tp(bool tp);
+        void set_ta(bool ta);
+};
+
 struct FMState {
     private:
-        bool stateChanged = false;
         bool stereoChanged = false;
         bool signalChanged = false;
 
@@ -29,35 +67,17 @@ struct FMState {
         uint8_t signalStrength;
 
         bool stereo = false;
-        bool rds = false;
-
-        String ps;
-        String rt;
-        int pty;
-        uint16_t pi;
-        bool tp = false;
     public:
+        FMRds rds;
         
         FMState(uint16_t, uint8_t);
 
-        bool getStateChanged();
         bool getSignalStateChanged();
         bool getStereoStateChanged();
 
         void allStatesChanged();
 
         void reset();
-
-        void setRDS(bool);
-        void setRdsPS(char*);
-        void setRdsRT(char*);
-        void setRdsPS(String);
-        void setRdsRT(String);
-        void setRdsPTY(int pty);
-        void setRdsPI(uint16_t pi);
-        void setRdsTP(bool tp);
-        uint16_t getRdsPI();
-        bool getRdsTP();
         
         void setStereo(bool);
         
@@ -76,10 +96,6 @@ struct FMState {
         uint16_t getFrequency();
         uint8_t getSignalStrength();
         bool hasStereo();
-        bool hasRDS();
-        String getRdsPS();
-        String getRdsRT();
-        int getRdsPTY();
 };
 
 class FMStationItem {

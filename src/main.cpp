@@ -49,7 +49,7 @@
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY       50
+#define UPDATE_DELAY       40
 #define TMP_SCR_SHOWTIME   35
 #define DEBOUNCE_DELAY  150
 
@@ -146,6 +146,7 @@ void menu_up(){
 
     si470x.clearRdsBuffer();
     si470x.setFrequency(state->getFrequency());
+    screen->refreshOnNextDraw();
   }else screen->moveUp();
 }
 
@@ -155,6 +156,7 @@ void menu_down(){
 
     si470x.clearRdsBuffer();
     si470x.setFrequency(state->getFrequency());
+    screen->refreshOnNextDraw();
   }else screen->moveDown();
 }
 
@@ -167,8 +169,7 @@ void menu_select(){
     state->reset();
     state->setFrequency(selected->getFrequency());
     if (selected->hasRds()){
-      state->setRDS(selected->hasRds());
-      state->setRdsPS(selected->getRdsPS());
+      state->rds.set_ps((char *)selected->getRdsPS().c_str());
     }
     
     ESPRadio::setScreen(MAIN_SCREEN);
@@ -235,7 +236,7 @@ void findChannels(){
 
 void setup() {
   Serial.begin(115200);
-  Serial.write("Starting up");
+  Serial.printf("Starting up\n");
   // initiate button pins. These should be connected between the pin and ground.
   /*pinMode(MENU_UP_PIN, INPUT_PULLUP);
   pinMode(MENU_DOWN_PIN, INPUT_PULLUP);
@@ -261,10 +262,14 @@ void setup() {
   si470x.setRDS(true);
   si470x.setRdsMode(0);
   si470x.setMono(false);
+  si470x.setFmDeemphasis(1);
   si470x.setAgc(true);
   si470x.setBlendLevelAdjustment(2);
   si470x.setBand(0);
-  si470x.setSeekThreshold(16);
+  si470x.setSeekThreshold(20);
+
+  si470x.setSoftmute(true);
+  si470x.setSoftmuteAttenuation(1);
 
   si470x.setFrequency(state->getFrequency());
   si470x.setVolume(state->getVolume());
@@ -310,53 +315,43 @@ void loop() {
 
   if (signalStrength < 10){
     state->setSignalStrength(0);
-  }else if (signalStrength < 20){
+  }else if (signalStrength < 25){
     state->setSignalStrength(1);
-  }else if (signalStrength < 26){
+  }else if (signalStrength < 55){
     state->setSignalStrength(2);
   }else {
     state->setSignalStrength(3);
   }
 
   if (si470x.getRdsReady()){
-    char *ps, *rt;
-    for(int i = 0; i < 4; i++){
-      ps = si470x.getRdsStationName();
-      rt = si470x.getRdsText2A();
-    }
-    
-    /*if (si470x.getRdsFlagAB() == 0){
-      rt = si470x.getRdsText2A();
-    }else rt = si470x.getRdsText2B();*/
-    // check for RDS data.
-    if (si470x.getRDSErrors() < 2){
-      if (ps != NULL)
-        state->setRdsPS(ps);
-      
-      /*if (si470x.getRdsFlagAB() == 0){
-        rt = si470x.getRdsText2A();
-      }else rt = si470x.getRdsText2B();
-      */if (rt != NULL){
-        state->setRdsRT(rt);
-      }
+    char *ps = si470x.getRdsStationName();
+    char *rt = si470x.getRdsText2A();
 
+    // check for RDS data.
+    if (si470x.getRDSErrors() < 3){
+
+      if (ps != NULL) 
+        state->rds.set_ps(ps);
       
-      state->setRdsPTY(si470x.getRdsProgramType());
-      state->setRdsPI(si470x.getRdsPI());
-      state->setRdsTP(si470x.getRdsTP());
+      if (rt != NULL)
+        state->rds.set_rt(rt);
+      
+      state->rds.set_pty(si470x.getRdsProgramType());
+      state->rds.set_pi(si470x.getRdsPI());
+      state->rds.set_tp(si470x.getRdsTP());
     }
   }
   
 
   // check if the screen needs updating, and update it.
-  if (ticker%8 == 0 || ESPRadio::buttonPressed) {
+  if (ticker%5 == 0 || ESPRadio::buttonPressed) {
     screen->tick();
 
     // update the item in the station list if there was RDS received.
-    if (state->hasRDS()){
+    if (state->rds.has_rds()){
       FMStationItem *fmitem = list->get(FMStationItem(state->getFrequency()));
       if (fmitem != nullptr)
-        fmitem->setRdsPS(state->getRdsPS().c_str());
+        fmitem->setRdsPS(state->rds.get_ps());
     }
   }
 

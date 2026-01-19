@@ -7,18 +7,175 @@
 
 #include "FMState.h"
 
+FMRds::FMRds(){
+    this->reset();
+}
+
+/**
+ * Returns the 8 character program service string for the current station.
+ */
+char * FMRds::get_ps(void){ return this->ps; }
+
+/**
+ * Returns the 65 character radio text string for the current station.
+ */
+char * FMRds::get_rt(void){ return this->rt; }
+
+/**
+ * Returns the program type integer for the current station.
+ */
+unsigned char FMRds::get_pty(void){ return this->pty; }
+
+/**
+ * Returns the 16 bit program identifier for the current station.
+ */
+unsigned short FMRds::get_pi(void){ return this->pi; }
+
+/**
+ * Returns the traffic program flag for the current station 
+ */
+bool FMRds::get_tp(void) { return this->tp; }
+
+/**
+ * Returns the traffic announcement flag for the current station.
+ */
+bool FMRds::get_ta(void) { return this->ta; }
+
+/**
+ * Returns true if the current station has RDS data.
+ */
+bool FMRds::has_rds(void) { return this->pi != 0; }
+
+bool FMRds::has_ps(void) { return strlen(this->ps) != 0; }
+
+/**
+ * Call this function after the rds information has been updated. This resets
+ * the update flag.
+ */
+void FMRds::has_updated(void){ this->update = false; }
+
+/**
+ * Returns true if the RDS information has been updated and the display must be
+ * updated.
+ */
+bool FMRds::needs_update(void) { return this->update; }
+
+/**
+ * Resets the RDS data. This is useful when the frequency has been changed.
+ */
+void FMRds::reset(void) {
+    this->pi = 0;
+    memset(this->ps, 0, 8);
+    memset(this->rt, 0, 64);
+    this->pty = -1;
+    this->tp = false;
+    this->ta = false;
+    this->update = true;
+}
+
+/**
+ * Sets the program service field for this station. This can only be
+ * up to 8 characters.
+ * @param ps the program service value
+ */
+void FMRds::set_ps(char *ps){
+    memset(this->ps, 0, 8);
+    if (ps == NULL){
+        this->update = true;
+        return;
+    }
+    if (strncmp(this->ps, ps, 8) == 0) return;
+    strncpy(this->ps, ps, 8);
+    this->ps[8] = 0;
+    this->update = true;
+
+    // replace all corrupted characters with a space.
+    for (int i = 0; i < 8; i++){
+        if (this->ps[i] < ' ' || this->ps[i] > '~')
+            this->ps[i] = ' ';
+    }
+}
+
+/**
+ * Sets the radio text field for this station. This can only be
+ * up to 64 characters.
+ * @param rt the station's radiotext field.
+ */
+void FMRds::set_rt(char *rt){
+    memset(this->rt, 0, 64);
+    if (rt == NULL){
+        this->update = true;
+        return;
+    }
+    strncpy(this->rt, rt, 64);
+    this->rt[64] = 0;
+    this->trim_rt();
+    this->update = true;
+
+    // replace all corrupted characters with a space.
+    for (int i = 0; i < strlen(this->rt); i++){
+        if (this->rt[i] < ' ' || this->rt[i] > '~')
+            this->rt[i] = ' ';
+    }
+}
+
+void FMRds::trim_rt(void){
+    char *end = strchr(this->rt, '\r');
+
+    if (end != NULL){
+        // has a carriage return character to signify the end of the string
+        for (int i = 0; i < strlen(end); i++)
+            end[i] = 0;
+        
+    }else {
+        for (int i = 64; i > 0; i--){
+            if (this->rt[i] >= '!' && this->rt[i] <= '~')
+                break;
+            
+            this->rt[i] = 0;
+        }
+    }
+}
+
+/**
+ * Sets the current station's RDS program type field. This will also set the RDS flag.
+ * This is a value between 0-31 representing the type of programming being broadcast on this channel.
+ * @param pty the station's PTY value.
+ */
+void FMRds::set_pty(unsigned char pty){ 
+    if (this->pty != pty) this->update = true; 
+    this->pty = pty;
+ }
+
+/**
+ * Sets the program identification field for the current station.
+ */
+void FMRds::set_pi(unsigned short pi){ 
+    if (this->pi != pi) this->update = true; 
+    this->pi = pi; 
+}
+
+/**
+ * Sets the traffic program flag for the current station.
+ */
+void FMRds::set_tp(bool tp){ 
+    if (tp != this->tp) this->update = true; 
+    this->tp = tp; 
+}
+
+/**
+ * Sets the traffic announcement flag for the current station.
+ */
+void FMRds::set_ta(bool ta){ 
+    if (ta != this->ta) this->update = true;
+    this->ta = ta; 
+}
 
 FMState::FMState(uint16_t frequency, uint8_t volume){
     this->frequency = frequency;
     this->volume = volume;
 
     this->reset();
-}
-
-bool FMState::getStateChanged(){
-    bool change = this->stateChanged;
-    this->stateChanged = false;
-    return change;
 }
 
 bool FMState::getSignalStateChanged(){
@@ -43,12 +200,13 @@ void FMState::allStatesChanged(){
  * This should be called anytime the frequency changes (except if the frequency changes due to AF).
  */
 void FMState::reset(){
-    this->ps = "[No Name]";
+    /*this->ps = "[No Name]";
     this->pty = -1;
     this->rt = "[No RadioText]";
     this->pi = 0x0;
     this->tp = false;
-    this->rds = false;
+    this->rds = false;*/
+    this->rds.reset();
     this->stereo = false;
     this->signalStrength = 0;
 }
@@ -56,8 +214,6 @@ void FMState::reset(){
  * Changes the frequency that the tuner is tuned to.
  */
 void FMState::setFrequency(uint16_t currentFrequency){
-    if (this->frequency != currentFrequency)
-        this->stateChanged = true;
     this->frequency = currentFrequency;
 
     this->reset();
@@ -68,7 +224,6 @@ void FMState::setFrequency(uint16_t currentFrequency){
  * @param step an integer specifing the step in multiples of 10kHz.
  */
 void FMState::incrementFrequency(int step){
-    this->stateChanged = true;
     this->frequency += step;
     if (this->frequency > FM_BAND_URANGE)
         this->frequency = FM_BAND_LRANGE;
@@ -86,7 +241,6 @@ void FMState::incrementFrequency(){
  * @param step an integer specifing the step in multiples of 10kHz.
  */
 void FMState::decrementFrequency(int step){
-    this->stateChanged = true;
     this->frequency -= step;
     if (this->frequency < FM_BAND_LRANGE)
         this->frequency = FM_BAND_URANGE;
@@ -120,77 +274,9 @@ void FMState::setSignalStrength(int signalStrength){
 }
 
 /**
- * Sets whether the current station has RDS data available.
- * @param rds a bool value representing whether the station has RDS data or not.
+ * Sets the volume level. This does not adjust the volume level for the SI470x library.
+ * @param int the volume level between 0 and 15.
  */
-void FMState::setRDS(bool rds){
-    if (!this->stateChanged) this->stateChanged = this->rds != rds;
-    this->rds = rds;
-}
-
-/**
- * Sets the current station's RDS program service field. This will also set the RDS flag.
- * @param rds_ps the program service value
- */
-void FMState::setRdsPS(char * rds_ps){
-    this->setRdsPS(String(rds_ps));
-}
-
-/**
- * Sets the current station's RDS program service field. This will also set the RDS flag.
- * @param rds_ps the program service value
- */
-void FMState::setRdsPS(String rds_ps){
-    rds_ps = String(rds_ps).substring(0, 8);
-    if (!this->stateChanged) this->stateChanged = !this->ps.equals(rds_ps);
-    this->ps = rds_ps;
-    this->rds = true;
-}
-
-/**
- * Sets the current station's RDS program type field. This will also set the RDS flag.
- * This is a value between 0-31 representing the type of programming being broadcast on this channel.
- * @param rds_pty the station's PTY value.
- */
-void FMState::setRdsPTY(int rds_pty){
-    if (!this->stateChanged) this->stateChanged = this->pty != rds_pty;
-    this->pty = rds_pty;
-    this->rds = true;
-}
-
-void FMState::setRdsPI(uint16_t rds_pi){
-    if (!this->stateChanged) this->stateChanged = (this->pi != rds_pi);
-    this->pi = rds_pi;
-    this->rds = true;
-}
-
-void FMState::setRdsTP(bool tp){
-    if (!this->stateChanged) this->stateChanged = (this->tp != tp);
-    this->tp = tp;
-    this->rds = true;
-}
-
-uint16_t FMState::getRdsPI(){
-    return this->pi;
-}
-
-/**
- * Sets the current station's RDS radiotext field. This will also set the RDS flag.
- * @param rds_rt the station's radiotext field.
- */
-void FMState::setRdsRT(char * rds_rt) {
-    this->setRdsRT(String(rds_rt));
-}
-
-void FMState::setRdsRT(String rds_rt){
-    int null_index = rds_rt.indexOf(13);
-    rds_rt = String(rds_rt).substring(0, null_index != -1 ? null_index : 64);
-    rds_rt.trim();
-    if (!this->stateChanged) this->stateChanged = !this->rt.equals(rds_rt);
-    this->rt = rds_rt;
-    this->rds = true;
-}
-
 void FMState::setVolume(int vol){
     if (vol < 0)
         vol = 0;
@@ -199,43 +285,47 @@ void FMState::setVolume(int vol){
     
     this->volume = vol;
 }
+
+/**
+ * Increments the volume level by 1. If the volume is 15, this has no effect.
+ */
 void FMState::incrementVolume(){
     this->volume++;
     if (this->volume > 15)
         this->volume = 15;
 }
+/**
+ * Decrements the volume level by 1. If the volume is 0, this has no effect.
+ */
 void FMState::decrementVolume(){
     this->volume--;
     if (this->volume < 0)
         this->volume = 0;
 }
 
+/**
+ * Returns the volume level.
+ */
 int8_t FMState::getVolume(){
     return this->volume;
 }
+/**
+ * Returns the frequency in 10kHz units.
+ */
 uint16_t FMState::getFrequency(){
     return this->frequency;
 }
+/**
+ * Returns the signal strength between 0 and 3.
+ */
 uint8_t FMState::getSignalStrength(){
     return this->signalStrength;
 }
+/**
+ * Returns if the station is in stereo or not.
+ */
 bool FMState::hasStereo(){
     return this->stereo;
-}
-bool FMState::hasRDS(){
-    return this->rds;
-}
-String FMState::getRdsPS(){
-    return this->ps;
-}
-String FMState::getRdsRT(){
-    return this->rt;
-}
-int FMState::getRdsPTY(){
-    return this->pty;
-}
-bool FMState::getRdsTP(){
-    return this->tp;
 }
 
 /**

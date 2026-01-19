@@ -1,0 +1,196 @@
+<html>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=0.4, maximum-scale=0.4, user-scalable=0"/>
+        <title>ESP32 Radio Web Interface</title>
+
+        <style>
+            html, body, .info-panel {
+                width: 100vw; height: 100vh; margin: 0; background-color: #f4f4f4;
+                font-size: 32pt;
+                font-family: Verdana, sans-serif;
+                overflow: hidden;
+            }
+
+            .info { width: 60vw; margin: auto; padding-top: 15vh; }
+            .info div div { width: 50%; display: inline; }
+
+            .info-panel .info .right p {
+                display: inline;
+                float: right;
+                text-align: right;
+                padding: 0 10px;
+            }
+            .info-panel .info .info-freq {
+                font-size: 100pt;
+                text-align: center;
+                font-weight: bold;
+                line-height: 185px;
+            }
+            .info-panel .info .info-rds { width: 60vw; text-align: center; }
+            .info-panel .info .info-rds p { margin: 15px 0; }
+            .info-panel .info .info-rds .rds-ps { font-size: 54pt; }
+            .info-panel .info .info-rds .rds-pty { color: #777; }
+
+            .info-panel .info .info-rds .rds-rt {
+                width: 60vw;
+                font-size: 40pt;
+                padding-top: 20pt;
+                margin: 0 auto;
+                white-space: nowrap;
+                overflow: hidden;
+                position: absolute;
+            }
+            .info-panel .info .info-rds .rds-rt span {
+                display: inline-block;
+                padding-left: 100%;
+                animation: rds-rt 10s linear(0.25 0%, 0.75 100%) infinite;
+            }
+            @keyframes rds-rt { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); }}
+
+            .button-panel {
+                width: 100vw;
+                padding-top: 40px;
+                border: 1px solid #888;
+                background-color: #fff;
+                position: absolute;
+                bottom: 0;
+            }
+            .button-panel div {
+                width: 90%;
+                margin-left: 5%;
+                text-align: center;
+                margin-bottom: 50px;
+            }
+            .relative-controls {
+                display: grid;
+                grid-template: "a a a a a";
+            }
+            .relative-controls a, .preset-controls a {
+                width: 90%;
+                height: 150px;
+                line-height: 150px;
+                text-decoration: none;
+                background-color: #f4f4f4;
+                border: 1px solid #333;
+                color: #000;
+            }
+            .preset-controls {
+                display: grid;
+                grid-template: "a a a";
+                row-gap: 50px;
+            }
+        </style>
+
+        <script>
+            let callServer = function(){
+                return new Promise(function (resolve, reject) {
+                    let xml = new XMLHttpRequest();
+                    xml.open("GET", "/rds-content");
+                    xml.onreadystatechange = function(ev){
+                        if (xml.status === 200){
+                            resolve(xml.response);
+                        }else {
+                            reject({status: this.status, statusText: this.statusText});
+                        }
+                    }
+                    xml.send();
+                });
+            }
+
+            let getServerContent = async function(){
+                //let serverJSON = await callServer();
+                serverJSON = "{\"frequency\": 106.7, \"stereo\": true, \"tp\": false, \"pi\": 9214, \"pty\": \"None\", \"ps\": \"GeorgeFM\", \"rt\": \"Your Dance Music Station - George FM\"}";
+
+                var json = JSON.parse(serverJSON);
+                document.getElementById("frequency").innerText = json.frequency;
+                document.getElementById("stereo").innerText = json.stereo === true ? "Stereo" : "";
+                document.getElementById("traffic-program").innerText = json.tp === true ? "TP" : "";
+                document.getElementById("rds-pi").innerText = json.pi;
+                document.getElementById("pty").innerText = json.pty;
+                document.getElementById("ps").innerText = json.ps;
+                document.getElementById("rt").innerText = json.rt;
+            }
+
+            let freqUp = function(){
+                let req = new XMLDocument();
+                req.open("GET", "/fup");
+                req.send();
+
+                getServerContent();
+            }
+            let freqDown = function(){
+                let req = new XMLDocument();
+                req.open("GET", "/fdn");
+                req.send();
+                
+                getServerContent();
+            }
+            let menu = function(){
+                let req = new XMLDocument();
+                req.open("GET", "/menu");
+                req.send();
+                
+                getServerContent();
+            }
+            let volup = function(){
+                let req = new XMLDocument();
+                req.open("GET", "/volup");
+                req.send();
+
+                getServerContent();
+            }
+            let voldn = function(){
+                let req = new XMLDocument();
+                req.open("GET", "/voldn");
+                req.send();
+
+                getServerContent();
+            }
+
+            document.addEventListener("DOMContentLoaded", function(){
+                
+            });
+        </script>
+    </head>
+    <body>
+        <div class="info-panel">
+            <div class="info">
+                <div style="display: flex;">
+                    <div class="left">
+                        <p class="rds-pi" id="rds-pi">FFFF</p>
+                    </div>
+                    <div class="right">
+                        <p class="rds-tp" id="traffic-program">TP</p>
+                        <p class="fm-stereo" id="stereo">Stereo</p>
+                    </div>
+                </div>
+                <div class="info-freq" id="frequency">
+                    99.9
+                </div>
+                <div class="info-rds">
+                    <p class="rds-pty" id="pty">Pop Music</p>
+                    <p class="rds-ps" id="ps">Test FM</p>
+                    <p class="rds-rt"><span id="rt">The best test beats are on 99.9 - Test FM.</span></p>
+                </div>
+            </div>
+        </div>
+        <div class="button-panel">
+            <div class="relative-controls">
+                <a href="#" onclick="freqDown();">Freq -</a>
+                <a href="#" onclick="freqUp();">Freq +</a>
+                <a href="#" onclick="menu();">Menu</a>
+                <a href="#" onclick="voldn();">Vol -</a>
+                <a href="#" onclick="voiup();">Vol +</a>
+            </div>
+            <div class="preset-controls">
+                <a href="#">Preset 1</a>
+                <a href="#">Preset 2</a>
+                <a href="#">Preset 3</a>
+                <a href="#">Preset 4</a>
+                <a href="#">Preset 5</a>
+                <a href="#">Preset 6</a>
+            </div>
+        </div>
+    </body>
+</html>

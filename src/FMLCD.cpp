@@ -160,71 +160,55 @@ void MainScreen::tick() {
   bool refreshWholeScreen = this->needsUpdate(); 
 
   
-  if(refreshWholeScreen || this->state->getStateChanged()){
-    #ifndef CLEAR_SCREEN_INSTEAD_OF_WRITE
-    // clear the screen
-    this->lcd->setCursor(LCD_WIDTH - 5, 0);
-    this->lcd->print("   ");
-    this->lcd->setCursor(LCD_WIDTH - 1, 0);
-    this->lcd->print(" ");
-    #else
-    this->lcd->clear();
-    #endif
+  if(refreshWholeScreen || this->state->rds.needs_update()){
+    
+    if (refreshWholeScreen) 
+      this->lcd->clear();
 
     // print the frequency. If the LCD is a 2 line, then it prints the frequency IF the rds ps is not available.
     this->lcd->setCursor(1, 0);
 
     #if LCD_HEIGHT == 2
-      if (!this->state->hasRDS()){
+      if (!this->state->rds.has_ps()){
     #endif
       this->lcd->printf("%.2f MHz  ", ((float)this->state->getFrequency() / 100.0f));
     #if LCD_HEIGHT == 2
       }
     #endif
-    
-    #ifndef CLEAR_SCREEN_INSTEAD_OF_WRITE
-    // clear the rest of the screen
-    this->clearLine(1);
-
-    #if LCD_HEIGHT > 2
-    this->clearLine(2);
-      #if LCD_HEIGHT > 3
-    this->clearLine(3);
-      #endif
-    #endif
-    #endif
 
     // Print the RDS information if it is available; else print 'No RDS'
-    if (this->state->hasRDS()){
+    if (this->state->rds.has_rds()){
+      //this->lcd->setCursor(LCD_WIDTH/2 - 3, LCD_HEIGHT > 3 ? 2 : 1);
+      //this->lcd->print("      ");
       #if LCD_HEIGHT > 2
         this->lcd->setCursor(0, 1);
       #else
         this->lcd->setCursor(0, 0);
       #endif
-      this->lcd->print(this->state->getRdsPS());
+      this->lcd->print(this->state->rds.get_ps());
 
       #if LCD_HEIGHT > 2
         // print the RDS indicator
         this->lcd->setCursor(LCD_WIDTH - 4, 1);
-        this->lcd->printf("%04X", this->state->getRdsPI());
+        this->lcd->printf("%04X", this->state->rds.get_pi());
 
         // draw the PTY only if the display is a 4 liner.
         #if LCD_HEIGHT > 3
           this->lcd->setCursor(0, 2);
-          this->lcd->print(this->state->getRdsPTY() != -1 ? pty_values[this->state->getRdsPTY()] : "[No PTY]");
+          this->lcd->printf("%- 18s", this->state->rds.get_pty() != -1 ? pty_values[this->state->rds.get_pty()] : "[No PTY]");
 
-          if (this->state->getRdsTP()){
-            this->lcd->setCursor(LCD_WIDTH-2, 2);
+          this->lcd->setCursor(LCD_WIDTH-2, 2);
+          if (this->state->rds.get_tp()){
             this->lcd->print("TP");
-          }
+          }else this->lcd->print("  ");
         #endif
       #endif
 
       // print the radio text
       this->lcd->setCursor(0, LCD_HEIGHT - 1);
-      if (this->state->getRdsRT().length() < LCD_WIDTH)
+      if (strlen(this->state->rds.get_rt()) < LCD_WIDTH)
         currentWindow = LCD_WIDTH;
-      this->lcd->print(this->state->getRdsRT().substring(currentWindow-LCD_WIDTH, currentWindow));
+      this->lcd->printf("%- *.*s", LCD_WIDTH, LCD_WIDTH, this->state->rds.get_rt() + currentWindow - LCD_WIDTH);
     }else{
       // display a no rds available message when there is no RDS.
       this->lcd->setCursor(LCD_WIDTH/2 - 3, LCD_HEIGHT > 3 ? 2 : 1);
@@ -235,12 +219,13 @@ void MainScreen::tick() {
     this->state->allStatesChanged();
     #endif
     this->hasUpdatedScreen();
+    this->state->rds.has_updated();
   }
 
   // update and draw the stereo indicator
   if (refreshWholeScreen ||  this->state->getStereoStateChanged()){
     #if LCD_WIDTH < 17 && LCD_HEIGHT > 2
-    if(this->state->hasRDS()) this->lcd->setCursor(LCD_WIDTH - 6, 1);
+    if(this->state->rds.has_rds()) this->lcd->setCursor(LCD_WIDTH - 6, 1);
     else this->lcd->setCursor(LCD_WIDTH - 4, 0);
     #else
     this->lcd->setCursor(LCD_WIDTH - 5, 0);
@@ -258,14 +243,14 @@ void MainScreen::tick() {
   }
 
   // scroll the radio text if it is longer than the width of the screen.
-  if (this->state->hasRDS() && this->state->getRdsRT().length() > LCD_WIDTH){
+  if (this->state->rds.has_rds() && strlen(this->state->rds.get_rt()) > LCD_WIDTH){
     this->lcd->setCursor(0, LCD_HEIGHT > 3 ? 3 : LCD_HEIGHT > 2 ? 2 : 1);
 
-    if (this->currentWindow > this->state->getRdsRT().length()){
-      this->currentWindow = this->state->getRdsRT().length() < LCD_WIDTH ? LCD_WIDTH : this->state->getRdsRT().length();
+    if (this->currentWindow > strlen(this->state->rds.get_rt())){
+      this->currentWindow = strlen(this->state->rds.get_rt()) < LCD_WIDTH ? LCD_WIDTH : strlen(this->state->rds.get_rt());
     }
 
-    if (this->currentWindow == LCD_WIDTH || this->currentWindow >= this->state->getRdsRT().length()){
+    if (this->currentWindow == LCD_WIDTH || this->currentWindow >= strlen(this->state->rds.get_rt())){
       this->wait++;
       if (this->wait >= SCROLL_WAITING_TIME){
         if (this->currentWindow == LCD_WIDTH)
@@ -274,8 +259,7 @@ void MainScreen::tick() {
         this->wait = 0;
       }
     }else this->currentWindow++;
-
-    this->lcd->print(this->state->getRdsRT().substring(currentWindow - LCD_WIDTH, currentWindow));
+    this->lcd->printf("%- *.*s", LCD_WIDTH, LCD_WIDTH, this->state->rds.get_rt() + currentWindow - LCD_WIDTH);
   }
 }
 
@@ -447,16 +431,16 @@ void VolumeScreen::init(){
  * Called in the main loop to update the screen if necessary.
  */
 void VolumeScreen::tick(){
-  if(this->needsUpdate() || this->state->getStateChanged()){
+  if(this->needsUpdate() || this->state->rds.needs_update()){
     this->lcd->setCursor(0, 0);
 
     #if LCD_HEIGHT > 2
 
-      if (!this->state->hasRDS() || this->state->getRdsPS().isEmpty() || this->state->getRdsPS().equals("[No PS]")){
+      if (!this->state->rds.has_rds() || !this->state->rds.has_ps()){
         this->lcd->setCursor(0, 0);
         this->lcd->printf(" %.2f MHz", ((float)this->state->getFrequency() / 100.0f));
       }else{
-        this->lcd->printf("%- 8s    ", this->state->getRdsPS());
+        this->lcd->printf("%- 8s    ", this->state->rds.get_ps());
       }
 
       this->lcd->setCursor(LCD_WIDTH - 5, 0);
@@ -491,5 +475,6 @@ void VolumeScreen::tick(){
     #endif
 
     this->hasUpdatedScreen();
+    this->state->rds.has_updated();
   }
 }
