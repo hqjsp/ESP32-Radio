@@ -63,7 +63,7 @@
 /* Screen timing stuff */
 #define UPDATE_DELAY       20
 #define TMP_SCR_SHOWTIME   40
-#define DEBOUNCE_DELAY  300
+#define DEBOUNCE_DELAY  150
 
 SI470X si470x;
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
@@ -72,6 +72,7 @@ FMState *state = new FMState(FM_DEFAULT_FREQ, 6);
 FMStationList *list = new FMStationList();
 
 Screen *screen = new MainScreen(&lcd, state);
+Screen *nextScreen = NULL;
 
 // Custom signal characters. 0-2 are the bar characters, signal_char is the antenna char
 const char signal_0[] = {B00000,B00000,B00000,B00000,B00000,B00000,B10000,B10000};
@@ -119,9 +120,7 @@ namespace ESPRadio {
               break;
           }
           if (newScr != nullptr){
-              delete screen;
-              screen = newScr;
-              screen->init();
+              nextScreen = newScr;
           }
     }
 
@@ -402,5 +401,13 @@ void loop() {
     ticker = 0;
     if (screen->getType() != MAIN_SCREEN) 
       ESPRadio::setScreen(MAIN_SCREEN);
+  }
+
+  // fix to issue with async crashes.
+  if (nextScreen != NULL){
+    delete screen;
+    screen = nextScreen;
+    nextScreen = NULL;
+    screen->init();
   }
 }

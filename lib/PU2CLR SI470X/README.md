@@ -1,3 +1,5 @@
+Altered for the ESP Radio project - hence included with this project.
+
 # [SI470X Arduino Library](https://pu2clr.github.io/SI470X/)
 
 It is an Arduino Library for Si4701/02/03 FM tuner. This [Silicon Labs](https://www.silabs.com/audio-and-radio/fm-radios/si4702-03-radio-receivers/device.si4703#techdocs) device family integrates the complete functionalities for FM  receivers, including RDS (Si4703). You can compile and run this library on most of board available on Arduino IDE (Examples: ATtiny85, boards based on ATmega328 and ATmega-32u4, ATmega2560, ARM Cortex, STM32, Arduino DUE, ESP32 and more).
