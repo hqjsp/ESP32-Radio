@@ -346,6 +346,7 @@ void StationListScreen::tick(){
 
       for (int i = 0; i < 3; i++){
         this->lcd->setCursor(1, i+1);
+        if (index + i >= this->list->size()) break;
         FMStationItem *item = this->list->get(index + i);
         #if LCD_WIDTH >= 20 
           this->lcd->printf("% 6.1f  %s", ((float)item->getFrequency() / 100.0f), item->getRdsPS());

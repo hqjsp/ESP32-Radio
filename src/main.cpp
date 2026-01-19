@@ -23,9 +23,21 @@
  * the FMLCD.h header file which will automatically adjust the content displayed on the main screen and volume screen.
  */
 
+#define ENABLE_WEB_SERVER // remove this to disable all the web server and web control stuff.
+
 #include <Arduino.h>
 #include <LiquidCrystal_I2C.h>
 #include "SI470X.h"
+
+#ifdef ENABLE_WEB_SERVER
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+
+#define WIFI_SSID   "ESP Radio"   // network ssid for the wifi hotspot
+#define WIFI_PASSWD "letmelisten" // network password
+
+#endif
 
 #include "FMLCD.h"
 
@@ -49,9 +61,9 @@
 
 
 /* Screen timing stuff */
-#define UPDATE_DELAY       40
-#define TMP_SCR_SHOWTIME   35
-#define DEBOUNCE_DELAY  150
+#define UPDATE_DELAY       20
+#define TMP_SCR_SHOWTIME   40
+#define DEBOUNCE_DELAY  300
 
 SI470X si470x;
 LiquidCrystal_I2C lcd = LiquidCrystal_I2C(0x27, 20, 4);
@@ -74,6 +86,10 @@ const char meter_full[] = {B00000,B11111,B11111,B11111,B11111,B11111,B11111,B111
 // screen objects update every third loop. This is so that other functions such as checking for button presses
 // are still able to be done.
 int ticker = 0;
+
+#ifdef ENABLE_WEB_SERVER
+AsyncWebServer server(80);
+#endif
 
 namespace ESPRadio {
 
@@ -147,7 +163,7 @@ void menu_up(){
     si470x.clearRdsBuffer();
     si470x.setFrequency(state->getFrequency());
     screen->refreshOnNextDraw();
-  }else screen->moveUp();
+  }else screen->moveDown();
 }
 
 void menu_down(){
@@ -157,7 +173,7 @@ void menu_down(){
     si470x.clearRdsBuffer();
     si470x.setFrequency(state->getFrequency());
     screen->refreshOnNextDraw();
-  }else screen->moveDown();
+  }else screen->moveUp();
 }
 
 void menu_select(){
@@ -256,6 +272,31 @@ void setup() {
   lcd.createChar(5, meter_full);
   lcd.clear();
 
+  #ifdef ENABLE_WEB_SERVER
+  WiFi.mode(WIFI_AP);
+  WiFi.softAP(WIFI_SSID, WIFI_PASSWD);
+  
+  IPAddress myIP = WiFi.softAPIP();
+
+  server.on("/info", HTTP_GET, [](AsyncWebServerRequest * request) {
+    char resp[256];
+    snprintf(resp, 256, "{\"frequency\": %d, \"stereo\": %s, \"tp\": %s, \"pi\": %d, \"pty\": %d, \"ps\": \"%s\", \"rt\": \"%s\"}", 
+      state->getFrequency(), state->hasStereo() ? "true" : "false", state->rds.get_tp() ? "true" : "false", state->rds.get_pi(), state->rds.get_pty(), 
+      state->rds.get_ps(), state->rds.get_rt());
+    AsyncWebServerResponse *response = request->beginResponse(200, "application/json", resp);
+    response->addHeader("Access-Control-Allow-Origin", "*");
+    request->send(response);
+  });
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest * request) {request->send(200, "text/html", "<html><head><meta charset='utf-8' /><meta name='viewport' content='width=device-width, initial-scale=0.4, maximum-scale=0.4, user-scalable=0'/><title>ESP32 Radio Web Interface</title><style>html, body, .info-panel {width: 100vw; height: 100vh; margin: 0; background-color: #f4f4f4;font-size: 32pt;font-family: Verdana, sans-serif;overflow: hidden;}.info { width: 60vw; margin: auto; padding-top: 15vh; }.info div div { width: 50%; display: inline; }.info-panel .info .right p {display: inline;float: right;text-align: right;padding: 0 10px;}.info-panel .info .info-freq {font-size: 100pt;text-align: center;font-weight: bold;line-height: 185px;}.info-panel .info .info-rds { width: 60vw; text-align: center; }.info-panel .info .info-rds p { margin: 15px 0; }.info-panel .info .info-rds .rds-ps { font-size: 54pt; }.info-panel .info .info-rds .rds-pty { color: #777; }.info-panel .info .info-rds .rds-rt {width: 60vw;font-size: 40pt;padding-top: 20pt;margin: 0 auto;white-space: nowrap;overflow: hidden;position: absolute;}.info-panel .info .info-rds .rds-rt span {display: inline-block;padding-left: 100%;animation: rds-rt 10s linear(0.25 0%, 0.75 100%) infinite;}@keyframes rds-rt { 0% { transform: translate(0, 0); } 100% { transform: translate(-100%, 0); }}.button-panel {width: 100vw;padding-top: 40px;border: 1px solid #888;background-color: #fff;position: absolute;bottom: 0;}.button-panel div {width: 90%;margin-left: 5%;text-align: center;margin-bottom: 50px;}.relative-controls {display: grid;grid-template: 'a a a a a';}.relative-controls a, .preset-controls a {width: 90%;height: 150px;line-height: 150px;text-decoration: none;background-color: #f4f4f4;border: 1px solid #333;color: #000;}.preset-controls {display: grid;grid-template: 'a a a';row-gap: 50px;}</style><script>const pty_values = ['None','News','Current Affairs','Information','Sport','Education','Drama','Culture','Science','Varied','Pop Music','Rock Music','Easy Listening','Light Classical','Classical','Other Music','Weather','Finance','Children\\\'s','Social Affairs','Religion','Phone-in','Travel','Leisure','Jazz Music','Country Music','National Music','Oldies Music','Folk Music','Documentary','Alarm Test','Alarm'];let callServer = function(){return new Promise(function (resolve, reject) {let xml = new XMLHttpRequest();xml.open('GET', '/info');xml.onreadystatechange = function(ev){resolve(JSON.parse(xml.responseText));};xml.send();});};let getServerContent = async function(){let json = await callServer();document.getElementById('frequency').innerText = (json.frequency/100).toFixed(2);document.getElementById('stereo').innerText = json.stereo === true ? 'Stereo' : '';document.getElementById('traffic-program').innerText = json.tp === true ? 'TP' : '';document.getElementById('rds-pi').innerText = json.pi.toString(16);let pty = '';if (json.pty === 255)pty = 'None';else pty = pty_values[json.pty];document.getElementById('pty').innerText = pty;document.getElementById('ps').innerText = json.ps;document.getElementById('rt').innerText = json.rt;};let sendCommand = function(cmd){let req = new XMLHttpRequest();req.open('GET', '/' + cmd);req.send();getServerContent();};document.addEventListener('DOMContentLoaded', function(){setInterval(() => {getServerContent();}, 1000);});</script></head><body><div class='info-panel'><div class='info'><div style='display: flex;'><div class='left'><p class='rds-pi' id='rds-pi'></p></div><div class='right'><p class='rds-tp' id='traffic-program'></p><p class='fm-stereo' id='stereo'></p></div></div><div class='info-freq' id='frequency'>000.00</div><div class='info-rds'><p class='rds-pty' id='pty'></p><p class='rds-ps' id='ps'>Test FM</p><p class='rds-rt'><span id='rt'>The best test beats are on 99.9 - Test FM.</span></p></div></div></div><div class='button-panel'><div class='relative-controls'><a href='#' onclick='sendCommand(\"fdn\")'>Freq -</a><a href='#' onclick='sendCommand(\"fup\")'>Freq +</a><a href='#' onclick='sendCommand(\"menu\")'>Menu</a><a href='#' onclick='sendCommand(\"voldn\")'>Vol -</a><a href='#' onclick='sendCommand(\"volup\")'>Vol +</a></div><div class='preset-controls'><a href='#'>Preset 1</a><a href='#'>Preset 2</a><a href='#'>Preset 3</a><a href='#'>Preset 4</a><a href='#'>Preset 5</a><a href='#'>Preset 6</a></div></div></body></html>");});
+  server.on("/fup", HTTP_GET, [](AsyncWebServerRequest * request) {if (ESPRadio::debounce()) menu_up();});
+  server.on("/fdn", HTTP_GET, [](AsyncWebServerRequest * request) {if (ESPRadio::debounce()) menu_down();});
+  server.on("/menu", HTTP_GET, [](AsyncWebServerRequest * request) {if (ESPRadio::debounce()) menu_select();});
+  server.on("/volup", HTTP_GET, [](AsyncWebServerRequest * request) {if (ESPRadio::debounce()) vol_up();});
+  server.on("/voldn", HTTP_GET, [](AsyncWebServerRequest * request) {if (ESPRadio::debounce()) vol_down();});
+  server.begin();
+  #endif
+
   lcd.setCursor(LCD_WIDTH / 2 - 6, 0);
   lcd.print("ESP-32 Radio");
 
@@ -344,7 +385,7 @@ void loop() {
   
 
   // check if the screen needs updating, and update it.
-  if (ticker%5 == 0 || ESPRadio::buttonPressed) {
+  if (ticker%10 == 0 || ESPRadio::buttonPressed) {
     screen->tick();
 
     // update the item in the station list if there was RDS received.
